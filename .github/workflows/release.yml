@@ -31,8 +31,33 @@ jobs:
       - name: Autoteste
         run: python contador_baus.py --autoteste
 
+      - name: Dados do .exe (nome, versão, autor)
+        shell: bash
+        run: |
+          IFS=. read -r a b c <<< "$(tr -d '[:space:]' < VERSION)"
+          v="$a.$b.$c"
+          cat > versao.txt <<EOF
+          VSVersionInfo(
+            ffi=FixedFileInfo(filevers=($a, $b, $c, 0), prodvers=($a, $b, $c, 0), mask=0x3f, flags=0x0,
+                              OS=0x40004, fileType=0x1, subtype=0x0, date=(0, 0)),
+            kids=[
+              StringFileInfo([StringTable('041604B0', [
+                StringStruct('CompanyName', 'gotolouco'),
+                StringStruct('FileDescription', 'ChestTracker'),
+                StringStruct('FileVersion', '$v'),
+                StringStruct('InternalName', 'ChestTracker'),
+                StringStruct('LegalCopyright', 'Copyright 2026 gotolouco'),
+                StringStruct('OriginalFilename', 'ChestTracker.exe'),
+                StringStruct('ProductName', 'ChestTracker'),
+                StringStruct('ProductVersion', '$v'),
+                StringStruct('Comments', 'Contador de baus para Fortnite - github.com/gotolouco/ChestTracker')])]),
+              VarFileInfo([VarStruct('Translation', [0x0416, 1200])])
+            ]
+          )
+          EOF
+
       - name: Gerar .exe
-        run: pyinstaller --onefile --noconsole --name ChestTracker --icon assets/chesttracker.ico --add-data "assets/chesttracker.ico;assets" contador_baus.py
+        run: pyinstaller --onefile --noconsole --name ChestTracker --icon assets/chesttracker.ico --add-data "assets/chesttracker.ico;assets" --version-file versao.txt contador_baus.py
 
       - name: Publicar release
         uses: softprops/action-gh-release@v2

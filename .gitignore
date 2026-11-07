@@ -1,3 +1,4 @@
 baus.json
+config.json
 *.tmp
 __pycache__/

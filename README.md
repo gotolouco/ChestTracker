@@ -27,7 +27,7 @@
 - **Contagem automática:** segurar E pelo tempo de abrir um baú soma +1. Toque rápido (pegar item) e hold longo (reviver) não contam.
 - **Anel de interação:** enche enquanto você segura E e fica verde quando o tempo já vai contar.
 - **Sessão e ritmo:** mostra quantos baús você abriu desde que abriu o programa e quantos por hora.
-- **Atalhos manuais:** F8 ou Mouse 4 somam, F7 desconta, F9 zera.
+- **Atalhos do seu jeito:** escolha qualquer tecla ou botão do mouse (meio, 4 e 5) para cada ação, na janela que abre antes do painel.
 - **Não atrapalha o jogo:** o mouse passa através do painel, e a contagem fica salva em `baus.json`.
 
 ## Download
@@ -36,7 +36,7 @@ Baixe o **`ChestTracker.exe`** na [última versão](https://github.com/gotolouco
 
 1. Coloque o `.exe` numa pasta só dele. A contagem é salva em `baus.json` nessa pasta.
 2. Deixe o Fortnite em **Tela cheia em janela**. Na tela cheia normal o overlay não aparece.
-3. Abra o `ChestTracker.exe`. Para fechar, aperte **F10**.
+3. Abra o `ChestTracker.exe`, confira os atalhos e clique em **INICIAR**. Para fechar o painel, use o atalho de fechar (padrão **F10**).
 
 > O Windows pode mostrar "O Windows protegeu o computador", porque o `.exe` não tem assinatura digital paga. Clique em **Mais informações → Executar assim mesmo**.
 
@@ -45,43 +45,42 @@ Baixe o **`ChestTracker.exe`** na [última versão](https://github.com/gotolouco
 1. Instale o [Python](https://www.python.org/downloads/) marcando **Add to PATH**.
 2. Dê dois cliques em `iniciar.bat`. Ele instala o `pynput` e abre o overlay.
 
-## Atalhos
+## Configuração
 
-| Tecla | Ação |
+Antes do painel abre uma janela para ajustar tudo. As escolhas ficam salvas em `config.json`, ao lado do `.exe`, e voltam preenchidas na próxima vez.
+
+<p align="center"><img src="docs/configuracao.png" alt="Janela de configuração com os atalhos e os ajustes" width="420"></p>
+
+- **Atalhos:** clique num botão e aperte a tecla ou o botão do mouse. Cada ação aceita até 2 atalhos. **Esc** cancela e **Backspace** deixa o espaço vazio. Se o atalho já estava em outra ação, ele sai de lá.
+- **Tempo mínimo e máximo:** segurar a tecla de abrir baú por um tempo entre os dois conta +1. O padrão é de 0,85 s a 3 s.
+- **Tamanho e posição do painel:** use 1.5 ou mais em telas 2K/4K.
+
+| Ação | Atalho padrão |
 |---|---|
-| Segurar E | +1 baú, se o tempo estiver entre `--min` e `--max` |
-| F8 ou Mouse 4 | +1 baú |
-| F7 | −1 baú |
-| F9 | zera o total |
-| F10 | fecha |
+| Abrir baú (segurar) | E |
+| Somar +1 | F8 ou Mouse 4 |
+| Descontar −1 | F7 |
+| Zerar total | F9 |
+| Fechar contador | F10 |
 
-## Opções
+O rodapé do painel mostra quanto tempo você segurou no último hold. Use esse valor para ajustar o tempo mínimo.
 
-Funcionam no `.exe` e no script:
+### Opções de linha de comando
 
-```
-ChestTracker.exe --min 0.85 --max 3.0 --escala 1.5 --x 30 --y 30
-```
-
-| Opção | Padrão | O que faz |
-|---|---|---|
-| `--min` | 0.85 | segundos mínimos segurando E para contar |
-| `--max` | 3.0 | acima disso não conta (ex.: reviver alguém) |
-| `--tecla` | e | tecla de interação |
-| `--escala` | 1.0 | tamanho do painel (1.5 em telas 2K/4K) |
-| `--x`, `--y` | 30 | posição do painel na tela |
-| `--arquivo` | baus.json | onde salvar a contagem |
-| `--zerar` | — | começa do 0 |
-| `--debug` | — | log detalhado |
-| `--autoteste` | — | roda os testes da contagem e sai |
-
-O rodapé mostra quanto tempo você segurou E no último hold. Use esse valor para ajustar o `--min`.
+| Opção | O que faz |
+|---|---|
+| `--direto` | pula a janela e abre o painel com o `config.json` salvo |
+| `--arquivo` | onde salvar a contagem (padrão `baus.json`) |
+| `--config` | onde salvar os atalhos e ajustes (padrão `config.json`) |
+| `--zerar` | começa a contagem do 0 |
+| `--debug` | log detalhado |
+| `--autoteste` | roda os testes e sai |
 
 <p align="center"><img src="docs/previa.png" alt="Estados do painel: parado, segurando E, pronto para contar e baú contado" width="400"></p>
 
 ## Limites
 
-- Caixas de munição também abrem segurando E e contam como baú. Corrija com F7.
+- Caixas de munição também abrem segurando E e contam como baú. Corrija com o atalho de descontar (padrão F7).
 - O contador só lê o teclado e o mouse e desenha uma janela. Ele não mexe no jogo.
 
 ## Nova versão
