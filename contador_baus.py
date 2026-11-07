@@ -381,156 +381,228 @@ def escolher_fonte(root):
     return next((f for f in FONTES if f in familias), "Arial")
 
 
+# Ajustes da janela: chave, rótulo, passo, mínimo, máximo, formato do valor
+AJUSTES = (("min", "TEMPO MÍNIMO", 0.05, 0.1, 10, "{:.2f}s"), ("max", "TEMPO MÁXIMO", 0.1, 0.2, 30, "{:.1f}s"),
+           ("escala", "TAMANHO DO PAINEL", 0.1, 0.3, 5, "{:.1f}x"), ("x", "POSIÇÃO X", 10, 0, 7680, "{:.0f} px"),
+           ("y", "POSIÇÃO Y", 10, 0, 4320, "{:.0f} px"))
+TECLA, TECLA_HOVER, TECLA_VAZIA, CARTAO, BORDA = "#2456D6", "#3A6BEA", "#101B48", "#0E1A4A", "#2A3A78"
+
+
 def configurar(cfg, arquivo_cfg):
-    """Janela antes do overlay: atalhos, tempos e painel. Devolve a config escolhida ou None se fechar."""
+    """Tela antes do overlay, no estilo do jogo: atalhos e ajustes. Devolve a config escolhida ou None."""
     import queue
     import tkinter as tk
+    from tkinter import font as tkfont
     from pynput import keyboard, mouse
 
     cfg = copia(cfg)  # só vale se clicar em INICIAR
+    W, H = 560, 680
     root = tk.Tk()
     root.title("ChestTracker")
-    root.configure(bg=AZUL_NOITE, padx=20, pady=14)
     root.resizable(False, False)
     colocar_icone(root)
+    cv = tk.Canvas(root, width=W, height=H, bg=AZUL_NOITE, highlightthickness=0)
+    cv.pack()
     fam = escolher_fonte(root)
-    normal = ("Segoe UI", 10)
+    medir = tkfont.Font(root, family=fam, size=-16).measure
+    pequena = ("Segoe UI Semibold", 10)
 
-    topo = tk.Canvas(root, width=380, height=60, bg=AZUL_NOITE, highlightthickness=0)
-    topo.grid(row=0, column=0, columnspan=3, sticky="w")
-    desenhar_bau(topo, 28, 30, 3.2)
-    texto(topo, 62, 30, "CHESTTRACKER", (fam, -34), AMARELO, 2)
+    ui = {"hover": None, "alvo": None, "ouvintes": [], "erro": False, "fase": 0, "repetir": None,
+          "status": "Clique num atalho e aperte a tecla. Use a rodinha do mouse nos ajustes."}
+    fila, regioes = queue.Queue(), []
 
-    def secao(linha, nome):
-        tk.Label(root, text=nome, font=(fam, -18), fg=CIANO, bg=AZUL_NOITE).grid(
-            row=linha, column=0, columnspan=3, sticky="w", pady=(12, 4))
+    def caixa(x0, y0, x1, y1, cor, sk=10, borda=""):
+        """Retângulo inclinado, como os botões do jogo."""
+        cv.create_polygon(x0 + sk, y0, x1, y0, x1 - sk, y1, x0, y1, fill=cor, outline=borda, width=2 if borda else 0)
 
-    botoes, captura, fila = {}, {"alvo": None, "ouvintes": []}, queue.Queue()
-    status = tk.StringVar(value="Clique num atalho e aperte a tecla ou o botão do mouse.")
+    def botao(id_, x0, y0, x1, y1, cor, cor_hover, aresta):
+        """Caixa com "aresta" mais escura embaixo, para parecer tecla; registra a área de clique."""
+        caixa(x0, y0 + 4, x1, y1 + 4, aresta)
+        caixa(x0, y0, x1, y1, cor_hover if ui["hover"] == id_ else cor)
+        regioes.append((x0, y0, x1, y1 + 4, id_))
 
-    def pintar():
-        for (acao, i), b in botoes.items():
-            nome = cfg["atalhos"][acao][i]
-            b.config(text=exibir(nome), bg=AZUL_TOPO if nome else ANEL, fg=BRANCO if nome else CINZA)
+    def render():
+        cv.delete("all")
+        regioes.clear()
+        for i in range(16):  # degradê igual ao do painel
+            cv.create_rectangle(0, H * i / 16, W, H * (i + 1) / 16 + 1, outline="",
+                                fill=misturar(AZUL_TOPO, AZUL_NOITE, 0.35 + 0.65 * i / 15))
+
+        cv.create_rectangle(0, 0, W, 92, fill=AZUL_FAIXA, outline="")
+        cv.create_rectangle(0, 0, W, 4, fill=CIANO, outline="")
+        cv.create_rectangle(0, 92, W, 95, fill=AMARELO, outline="")
+        desenhar_bau(cv, 56, 48, 4)
+        texto(cv, 104, 40, "CHESTTRACKER", (fam, -42), AMARELO, 3)
+        cv.create_text(106, 74, text="CONFIGURAÇÃO DO CONTADOR", font=(fam, -15), fill=CIANO, anchor="w")
+
+        def secao(y, nome):
+            caixa(24, y, 24 + medir(nome) + 34, y + 26, AMARELO, sk=8)
+            cv.create_text(24 + 17, y + 13, text=nome, font=(fam, -16), fill=PRETO, anchor="w")
+
+        secao(112, "ATALHOS")
+        for n, (acao, rotulo) in enumerate(ACOES):
+            y = 150 + n * 46
+            caixa(24, y, W - 24, y + 40, CARTAO)
+            cv.create_text(46, y + 20, text=rotulo.upper(), font=(fam, -18), fill=BRANCO, anchor="w")
+            for i in (0, 1):
+                x0, id_ = 274 + i * 130, ("tecla", acao, i)
+                nome = cfg["atalhos"][acao][i]
+                if ui["alvo"] == (acao, i):
+                    cor = AMARELO if ui["fase"] else "#FFB000"
+                    botao(id_, x0, y + 5, x0 + 118, y + 31, cor, cor, "#8B5A12")
+                    rotulo_tecla, cor_texto = "APERTE...", PRETO
+                elif nome:
+                    botao(id_, x0, y + 5, x0 + 118, y + 31, TECLA, TECLA_HOVER, "#13307E")
+                    rotulo_tecla, cor_texto = exibir(nome), BRANCO
+                else:
+                    botao(id_, x0, y + 5, x0 + 118, y + 31, TECLA_VAZIA, BORDA, "#070E2C")
+                    rotulo_tecla, cor_texto = "+ ADICIONAR", CINZA
+                cv.create_text(x0 + 59, y + 18, text=rotulo_tecla, font=(fam, -16), fill=cor_texto)
+
+        secao(392, "AJUSTES")
+        for n, (chave, rotulo, _, _, _, fmt) in enumerate(AJUSTES):
+            x, y, w = 24 + (n % 3) * 174, 430 + (n // 3) * 68, 162
+            caixa(x, y, x + w, y + 60, CARTAO)
+            regioes.append((x, y, x + w, y + 60, ("campo", chave)))
+            cv.create_text(x + 16, y + 15, text=rotulo, font=(fam, -13), fill=CINZA, anchor="w")
+            botao(("menos", chave), x + 12, y + 28, x + 44, y + 50, TECLA, TECLA_HOVER, "#13307E")
+            botao(("mais", chave), x + w - 44, y + 28, x + w - 12, y + 50, TECLA, TECLA_HOVER, "#13307E")
+            for cx in (x + 28, x + w - 28):  # sinais desenhados: nítidos em qualquer fonte
+                cv.create_line(cx - 6, y + 39, cx + 6, y + 39, fill=BRANCO, width=3)
+            cv.create_line(x + w - 28, y + 33, x + w - 28, y + 45, fill=BRANCO, width=3)
+            cv.create_text(x + w / 2, y + 39, text=fmt.format(cfg[chave]), font=(fam, -20), fill=AMARELO)
+
+        cv.create_text(26, 586, text=ui["status"], font=pequena, width=W - 52, anchor="w",
+                       fill=VERMELHO if ui["erro"] else BRANCO)
+
+        botao(("restaurar",), 24, 618, 200, 662, TECLA_VAZIA, BORDA, "#070E2C")
+        cv.create_text(112, 640, text="RESTAURAR PADRÃO", font=(fam, -16), fill=CINZA)
+        botao(("iniciar",), 216, 612, W - 24, 662, AMARELO, "#FFE58A", "#B97C0E")
+        cv.create_text((216 + W - 24) / 2, 637, text="INICIAR", font=(fam, -30), fill=PRETO)
+
+    def avisar(msg, erro=False):
+        ui.update(status=msg, erro=erro)
+        render()
 
     def parar():
-        for o in captura["ouvintes"]:
+        for o in ui["ouvintes"]:
             o.stop()
-        captura.update(alvo=None, ouvintes=[])
+        ui.update(alvo=None, ouvintes=[])
 
     def capturar(acao, i):
         parar()
-        pintar()
-        root.focus_set()  # Backspace não pode apagar texto de um campo
-        captura["alvo"] = (acao, i)
-        botoes[(acao, i)].config(text="APERTE...", bg=AMARELO, fg=PRETO)
-        status.set("Aperte a tecla ou o botão do mouse (meio, 4 ou 5). Esc cancela, Backspace limpa.")
+        ui["alvo"] = (acao, i)
+        avisar("Aperte a tecla ou o botão do mouse (meio, 4 ou 5). Esc cancela, Backspace limpa.")
 
-        def clique(x, y, botao, apertou):  # sem return: False pararia o listener
+        def clique(x, y, b, apertou):  # sem return: False pararia o listener
             if apertou:
-                fila.put(nome_botao(botao))
+                fila.put(nome_botao(b))
 
         k = keyboard.Listener(on_press=lambda key: fila.put(nome_tecla(key)))
         m = mouse.Listener(on_click=clique)
         k.start()
         m.start()
-        captura["ouvintes"] = [k, m]
+        ui["ouvintes"] = [k, m]
 
     def receber():
         while not fila.empty():
             nome = fila.get_nowait()
-            if captura["alvo"] is None or nome is None:  # clique esquerdo/direito: continua esperando
+            if ui["alvo"] is None or nome is None:  # clique esquerdo/direito: continua esperando
                 continue
-            acao, i = captura["alvo"]
+            acao, i = ui["alvo"]
             parar()
             if nome == "esc":
-                status.set("Cancelado.")
+                avisar("Cancelado.")
             elif nome == "backspace":
                 cfg["atalhos"][acao][i] = ""
-                status.set(f"{ROTULOS[acao]}: atalho removido.")
+                avisar(f"{ROTULOS[acao]}: atalho removido.")
             else:
-                status.set(atribuir(cfg["atalhos"], acao, i, nome))
-            pintar()
+                avisar(atribuir(cfg["atalhos"], acao, i, nome))
+        fase = int(time.monotonic() * 4) % 2  # tecla em captura pisca
+        if ui["alvo"] and fase != ui["fase"]:
+            ui["fase"] = fase
+            render()
         root.after(30, receber)
 
-    secao(1, "ATALHOS")
-    for n, (acao, rotulo) in enumerate(ACOES, start=2):
-        tk.Label(root, text=rotulo, font=normal, fg=BRANCO, bg=AZUL_NOITE, anchor="w", width=18).grid(
-            row=n, column=0, sticky="w", pady=2)
-        for i in (0, 1):
-            b = tk.Button(root, command=lambda a=acao, j=i: capturar(a, j), font=(fam, -15), width=11,
-                          relief="flat", bd=0, takefocus=0, cursor="hand2",
-                          activebackground=AMARELO, activeforeground=PRETO)
-            b.grid(row=n, column=1 + i, padx=3, pady=2, ipady=2)
-            botoes[(acao, i)] = b
+    def mudar(chave, sinal):
+        _, _, passo, menor, maior, _ = next(a for a in AJUSTES if a[0] == chave)
+        v = min(max(cfg[chave] + sinal * passo, menor), maior)
+        cfg[chave] = round(v) if chave in ("x", "y") else round(v, 2)
+        ui["erro"] = False
+        render()
 
-    secao(7, "AJUSTES")
-    campos = {}
+    def segurar_mudar(id_, atraso=400):  # segurar o botão continua mudando
+        ui["repetir"] = root.after(atraso, lambda: (mudar(id_[1], -1 if id_[0] == "menos" else 1),
+                                                    segurar_mudar(id_, 60)))
 
-    def campo(linha, coluna, chave, rotulo, de, ate, passo, fmt):
-        quadro = tk.Frame(root, bg=AZUL_NOITE)
-        quadro.grid(row=linha, column=coluna, sticky="w", pady=2, padx=(0, 6))
-        tk.Label(quadro, text=rotulo, font=normal, fg=CINZA, bg=AZUL_NOITE).pack(anchor="w")
-        var = tk.StringVar(value=fmt % cfg[chave])
-        tk.Spinbox(quadro, from_=de, to=ate, increment=passo, format=fmt, textvariable=var, width=9,
-                   font=normal, relief="flat", bg=BRANCO, buttonbackground=AZUL_TOPO).pack(anchor="w")
-        var.set(fmt % cfg[chave])  # o Spinbox troca pelo valor inicial dele ao ser criado
-        campos[chave] = (var, fmt)
+    def achar(e):
+        return next((r[4] for r in reversed(regioes) if r[0] <= e.x <= r[2] and r[1] <= e.y <= r[3]), None)
 
-    campo(8, 0, "min", "Tempo mínimo (s)", 0.1, 10, 0.05, "%.2f")
-    campo(8, 1, "max", "Tempo máximo (s)", 0.2, 30, 0.1, "%.2f")
-    campo(8, 2, "escala", "Tamanho do painel", 0.3, 5, 0.1, "%.1f")
-    campo(9, 0, "x", "Posição X (px)", 0, 7680, 10, "%.0f")
-    campo(9, 1, "y", "Posição Y (px)", 0, 4320, 10, "%.0f")
+    def mover(e):
+        id_ = achar(e)
+        id_ = None if id_ and id_[0] == "campo" else id_
+        if id_ != ui["hover"]:
+            ui["hover"] = id_
+            cv.config(cursor="hand2" if id_ else "")
+            render()
 
-    tk.Label(root, textvariable=status, font=normal, fg=AMARELO, bg=AZUL_NOITE, wraplength=380,
-             justify="left", anchor="nw", height=2)  # 2 linhas fixas: a janela não muda de tamanho.grid(row=10, column=0, columnspan=3, sticky="we", pady=(12, 8))
+    def clicar(e):
+        id_ = achar(e)
+        if not id_:
+            return
+        if id_[0] == "tecla":
+            capturar(id_[1], id_[2])
+        elif id_[0] in ("menos", "mais"):
+            mudar(id_[1], -1 if id_[0] == "menos" else 1)
+            segurar_mudar(id_)
+        elif id_[0] == "iniciar":
+            iniciar()
+        elif id_[0] == "restaurar":
+            restaurar()
+
+    def soltar(_e):
+        if ui["repetir"]:
+            root.after_cancel(ui["repetir"])
+            ui["repetir"] = None
+
+    def rodinha(e):
+        id_ = achar(e)
+        if id_ and id_[0] in ("campo", "menos", "mais"):
+            mudar(id_[1], 1 if e.delta > 0 or getattr(e, "num", 0) == 4 else -1)
 
     resultado = {"cfg": None}
 
-    def iniciar(_evento=None):
-        if captura["alvo"]:
-            return  # Enter durante a captura vira atalho, não clique em INICIAR
-        novo = copia(cfg)
-        try:
-            for chave, (var, _) in campos.items():
-                v = float(var.get().replace(",", "."))
-                novo[chave] = round(v) if chave in ("x", "y") else v
-        except ValueError:
-            status.set("Algum número está inválido. Use só números, com ponto ou vírgula.")
-            return
-        erro = validar(novo)
+    def iniciar(_e=None):
+        if ui["alvo"]:
+            return  # Enter durante a captura vira atalho, não INICIAR
+        erro = validar(cfg)
         if erro:
-            status.set(erro)
+            avisar(erro, erro=True)
             return
-        salvar_json(arquivo_cfg, novo)
-        resultado["cfg"] = novo
-        parar()
-        root.destroy()
+        salvar_json(arquivo_cfg, cfg)
+        resultado["cfg"] = copia(cfg)
+        fechar()
 
     def restaurar():
         parar()
         cfg.clear()
         cfg.update(copia(PADRAO))
-        for chave, (var, fmt) in campos.items():
-            var.set(fmt % cfg[chave])
-        pintar()
-        status.set("Atalhos e ajustes voltaram ao padrão.")
+        avisar("Atalhos e ajustes voltaram ao padrão.")
 
     def fechar():
         parar()
+        soltar(None)
         root.destroy()
 
-    tk.Button(root, text="Restaurar padrão", command=restaurar, font=normal, relief="flat", bd=0,
-              bg=ANEL, fg=CINZA, activebackground=AZUL_TOPO, cursor="hand2").grid(
-        row=11, column=0, sticky="w", ipadx=8, ipady=4)
-    tk.Button(root, text="INICIAR", command=iniciar, font=(fam, -22), relief="flat", bd=0,
-              bg=AMARELO, fg=PRETO, activebackground="#FFB000", cursor="hand2").grid(
-        row=11, column=1, columnspan=2, sticky="we", padx=3, ipady=4)
-
+    cv.bind("<Motion>", mover)
+    cv.bind("<Button-1>", clicar)
+    cv.bind("<ButtonRelease-1>", soltar)
+    cv.bind("<MouseWheel>", rodinha)  # Windows
+    cv.bind("<Button-4>", rodinha)    # Linux
+    cv.bind("<Button-5>", rodinha)
     root.bind("<Return>", iniciar)
     root.protocol("WM_DELETE_WINDOW", fechar)
-    pintar()
+    render()
     receber()
     root.mainloop()
     return resultado["cfg"]

@@ -54,6 +54,7 @@ Antes do painel abre uma janela para ajustar tudo. As escolhas ficam salvas em `
 - **Atalhos:** clique num botão e aperte a tecla ou o botão do mouse. Cada ação aceita até 2 atalhos. **Esc** cancela e **Backspace** deixa o espaço vazio. Se o atalho já estava em outra ação, ele sai de lá.
 - **Tempo mínimo e máximo:** segurar a tecla de abrir baú por um tempo entre os dois conta +1. O padrão é de 0,85 s a 3 s.
 - **Tamanho e posição do painel:** use 1.5 ou mais em telas 2K/4K.
+- **Mudar os números:** clique em **+** e **−** (segure para ir mais rápido) ou use a rodinha do mouse em cima do ajuste.
 
 | Ação | Atalho padrão |
 |---|---|
