@@ -32,7 +32,7 @@ jobs:
         run: python contador_baus.py --autoteste
 
       - name: Gerar .exe
-        run: pyinstaller --onefile --noconsole --name ChestTracker contador_baus.py
+        run: pyinstaller --onefile --noconsole --name ChestTracker --icon assets/chesttracker.ico --add-data "assets/chesttracker.ico;assets" contador_baus.py
 
       - name: Publicar release
         uses: softprops/action-gh-release@v2

@@ -1,10 +1,34 @@
-# ChestTracker
+<p align="center">
+  <img src="docs/banner.png" alt="ChestTracker — contador de baús para Fortnite" width="100%">
+</p>
 
-![Python](https://img.shields.io/badge/python-3.9%2B-3776AB?logo=python&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?logo=windows&logoColor=white) [![Release](https://img.shields.io/github/v/release/gotolouco/ChestTracker?label=download)](https://github.com/gotolouco/ChestTracker/releases/latest)
+<p align="center">
+  <a href="https://github.com/gotolouco/ChestTracker/releases/latest"><img src="https://img.shields.io/github/v/release/gotolouco/ChestTracker?label=vers%C3%A3o&color=FFD84D&labelColor=0A1640" alt="Versão"></a>
+  <a href="https://github.com/gotolouco/ChestTracker/releases"><img src="https://img.shields.io/github/downloads/gotolouco/ChestTracker/total?label=downloads&color=3FD0FF&labelColor=0A1640" alt="Downloads"></a>
+  <img src="https://img.shields.io/badge/Windows-10%20%7C%2011-2456D6?logo=windows&logoColor=white&labelColor=0A1640" alt="Windows 10 e 11">
+  <img src="https://img.shields.io/badge/python-3.9%2B-2456D6?logo=python&logoColor=white&labelColor=0A1640" alt="Python 3.9+">
+</p>
 
-Contador de baús do Fortnite: overlay em cima do jogo que conta os baús que você abre. Um baú conta quando você segura **E** pelo tempo de abertura (padrão: entre 0,85 s e 3 s).
+<p align="center">
+  <b>Overlay que conta os baús que você abre no Fortnite.</b><br>
+  Segure <b>E</b> até o baú abrir e ele soma sozinho, num painel no estilo do HUD do jogo.
+</p>
 
-![Prévia do overlay](docs/previa.png)
+<p align="center">
+  <a href="https://github.com/gotolouco/ChestTracker/releases/latest/download/ChestTracker.exe"><b>⬇ Baixar ChestTracker.exe</b></a>
+</p>
+
+<p align="center">
+  <img src="docs/demo.gif" alt="O anel enche enquanto segura E, fica verde no tempo certo e o baú entra com +1" width="486">
+</p>
+
+## Recursos
+
+- **Contagem automática:** segurar E pelo tempo de abrir um baú soma +1. Toque rápido (pegar item) e hold longo (reviver) não contam.
+- **Anel de interação:** enche enquanto você segura E e fica verde quando o tempo já vai contar.
+- **Sessão e ritmo:** mostra quantos baús você abriu desde que abriu o programa e quantos por hora.
+- **Atalhos manuais:** F8 ou Mouse 4 somam, F7 desconta, F9 zera.
+- **Não atrapalha o jogo:** o mouse passa através do painel, e a contagem fica salva em `baus.json`.
 
 ## Download
 
@@ -53,6 +77,8 @@ ChestTracker.exe --min 0.85 --max 3.0 --escala 1.5 --x 30 --y 30
 
 O rodapé mostra quanto tempo você segurou E no último hold. Use esse valor para ajustar o `--min`.
 
+<p align="center"><img src="docs/previa.png" alt="Estados do painel: parado, segurando E, pronto para contar e baú contado" width="400"></p>
+
 ## Limites
 
 - Caixas de munição também abrem segurando E e contam como baú. Corrija com F7.
@@ -61,3 +87,7 @@ O rodapé mostra quanto tempo você segurou E no último hold. Use esse valor pa
 ## Nova versão
 
 Mude o número no arquivo `VERSION` (ex.: `1.1.0`) e envie para a `main`. O GitHub testa, gera o `ChestTracker.exe` e publica a release `v1.1.0` sozinho.
+
+---
+
+<sub>ChestTracker é um projeto de fã e não tem ligação com a Epic Games. Fortnite é marca registrada da Epic Games, Inc.</sub>

@@ -8,6 +8,7 @@ import argparse
 import ctypes
 import json
 import logging
+import math
 import sys
 import threading
 import time
@@ -17,6 +18,7 @@ log = logging.getLogger("baus")
 BAUS_JA_ABERTOS = 1000  # baús abertos antes do contador existir
 # No .exe (PyInstaller) o __file__ fica numa pasta temporária apagada ao fechar; salva ao lado do .exe.
 PASTA = Path(sys.executable).parent if getattr(sys, "frozen", False) else Path(__file__).parent
+RECURSOS = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))  # arquivos embutidos no .exe
 
 
 class Contador:
@@ -149,9 +151,23 @@ def iniciar_teclado(cont, args, estado):
 # Paleta do HUD do Fortnite: azul profundo, amarelo lendário, contorno preto grosso.
 CHAVE = "#010101"  # cor que vira transparente
 AMARELO, BRANCO, PRETO = "#FFD84D", "#FFFFFF", "#000000"
-AZUL_NOITE, AZUL, AZUL_FAIXA, CIANO = "#0A1640", "#1B3FA0", "#050B22", "#3FD0FF"
-VERDE, VERMELHO, CINZA = "#7CFC00", "#FF4D4D", "#AEB8D6"
+AZUL_TOPO, AZUL_NOITE, AZUL_FAIXA, CIANO = "#2456D6", "#0A1640", "#050B22", "#3FD0FF"
+VERDE, VERMELHO, CINZA, ANEL = "#7CFC00", "#FF4D4D", "#AEB8D6", "#16224F"
 FONTES = ("Burbank Big Condensed Black", "Burbank Big Condensed", "Impact", "Arial Black")
+
+# Baú em pixel art 16x16: o mesmo desenho do ícone do programa.
+BAU_CORES = {"k": "#1A0F05", "h": "#FFE58A", "l": "#FFC93C", "d": "#8B5A12", "b": "#E8A317",
+             "s": "#B97C0E", "w": "#FFF3B0", "o": "#5A3A0A"}
+_MEIO = ("hhdhhhhhhdhh", "lldlllllldll", "lldlkkkkldll", "kkkkwwwwkkkk", "bbdkwoowkdbb",
+         "bbdkwwwwkdbb", "bbdbkkkkbdbb", "bbdbbbbbbdbb", "bbdbbbbbbdbb", "ssdssssssdss")
+BAU = (("." * 16,) * 2 + ("..kkkkkkkkkkkk..",) + tuple(".k" + m + "k." for m in _MEIO)
+       + ("..kkkkkkkkkkkk..",) + ("." * 16,) * 2)
+
+
+def misturar(a, b, f):
+    """Cor entre a e b (f de 0 a 1), para o degradê do painel."""
+    ca, cb = (int(a[i:i + 2], 16) for i in (1, 3, 5)), (int(b[i:i + 2], 16) for i in (1, 3, 5))
+    return "#" + "".join(f"{round(x + (y - x) * f):02X}" for x, y in zip(ca, cb))
 
 
 def texto(cv, x, y, s, fonte, cor, borda, anchor="w"):
@@ -161,13 +177,19 @@ def texto(cv, x, y, s, fonte, cor, borda, anchor="w"):
     cv.create_text(x, y, text=s, font=fonte, fill=cor, anchor=anchor)
 
 
-def desenhar_bau(cv, cx, cy, k):
-    b = max(1, round(2 * k))
-    cv.create_rectangle(cx - 22*k, cy - 3*k, cx + 22*k, cy + 18*k, fill="#E8A317", outline=PRETO, width=b)
-    cv.create_rectangle(cx - 22*k, cy - 17*k, cx + 22*k, cy - 3*k, fill="#FFC93C", outline=PRETO, width=b)
-    for x in (cx - 15*k, cx + 11*k):  # cintas de metal
-        cv.create_rectangle(x, cy - 17*k, x + 4*k, cy + 18*k, fill="#8B5A12", outline=PRETO, width=b)
-    cv.create_rectangle(cx - 5*k, cy - 8*k, cx + 5*k, cy + 4*k, fill="#FFF3B0", outline=PRETO, width=b)
+def desenhar_bau(cv, cx, cy, c):
+    """Desenha BAU centrado em (cx, cy), cada pixel com c px; junta pixels iguais em faixas."""
+    ox, oy = cx - 8 * c, cy - 8 * c
+    for j, linha in enumerate(BAU):
+        i = 0
+        while i < 16:
+            f = i
+            while f < 16 and linha[f] == linha[i]:
+                f += 1
+            if linha[i] != ".":
+                cv.create_rectangle(round(ox + i * c), round(oy + j * c), round(ox + f * c),
+                                    round(oy + (j + 1) * c), fill=BAU_CORES[linha[i]], outline="")
+            i = f
 
 
 def desenhar(cv, cont, t, fam, k, tecla, anim):
@@ -179,34 +201,44 @@ def desenhar(cv, cont, t, fam, k, tecla, anim):
         cv.create_polygon(x0 + sk*(1 - y0/H), y0, x1 - sk*y0/H, y0,
                           x1 - sk*y1/H, y1, x0 + sk*(1 - y1/H), y1, fill=cor, outline="")
 
-    faixa(0, H, AZUL_NOITE)
-    faixa(0, 50*k, AZUL)
+    passos, corpo = 14, H - 24*k
+    for i in range(passos):  # degradê de cima (azul vivo) para baixo (azul noite)
+        faixa(corpo * i / passos, corpo * (i + 1) / passos + 1, misturar(AZUL_TOPO, AZUL_NOITE, i / (passos - 1)))
     faixa(0, 3*k, CIANO)
     faixa(H - 24*k, H, AZUL_FAIXA)
+    faixa(H - 25*k, H - 23*k, AMARELO)
     faixa(0, H, AMARELO, x1=sk + 10*k)
 
-    # anel de interação em volta do baú (igual ao "segure E" do jogo)
+    # "pop" no número, raios dourados e "+1" quando um baú entra
+    if cont.total > anim["visto"]:
+        anim["pop"] = t
+    anim["visto"] = cont.total
+    dt = t - anim["pop"]
     cx, cy, r, w = 74*k, 44*k, 32*k, max(2, round(7*k))
-    cv.create_oval(cx - r, cy - r, cx + r, cy + r, outline="#24305A", width=w)
+    if dt < 0.6:
+        alcance, giro = r * (1.45 - 0.35 * dt / 0.6), dt * 90
+        for n in range(10):
+            a = math.radians(giro + n * 36)
+            pontas = [(cx + alcance * math.cos(a + d), cy + alcance * math.sin(a + d)) for d in (-0.16, 0.16)]
+            cv.create_polygon(cx, cy, *pontas[0], *pontas[1], fill=AMARELO if n % 2 else "#FFB000", outline="")
+
+    # anel de interação em volta do baú (igual ao "segure E" do jogo)
+    cv.create_oval(cx - r, cy - r, cx + r, cy + r, fill=AZUL_NOITE, outline=ANEL, width=w)
     s = cont.segurando(t)
     if s is not None:
         cor = VERMELHO if s > cont.maximo else VERDE if s >= cont.minimo else BRANCO
         frac = min(s / cont.minimo, 1)
         cv.create_arc(cx - r, cy - r, cx + r, cy + r, start=90, extent=-359.9*frac,
                       style="arc", outline=cor, width=w)
-    desenhar_bau(cv, cx, cy + 2*k, k)
+    salto = 4*k * max(0.0, 1 - dt / 0.25)  # baú pula junto com o número
+    desenhar_bau(cv, cx, cy - salto, 3.6*k)
 
-    # "pop" no número e "+1" subindo quando um baú entra
-    if cont.total > anim["visto"]:
-        anim["pop"] = t
-    anim["visto"] = cont.total
-    dt = t - anim["pop"]
     escala = 1 + 0.2 * max(0.0, 1 - dt / 0.3)
     texto(cv, 222*k, 22*k, "BAÚS ABERTOS", (fam, -round(17*k)), BRANCO, max(1, round(2*k)), "center")
     numero = f"{cont.total:,}".replace(",", ".")
     texto(cv, 222*k, 60*k, numero, (fam, -round(50*k*escala)), AMARELO, max(2, round(3*k)), "center")
     if dt < 0.7:
-        texto(cv, cx + r, cy - r + 8*k - 30*k*dt, "+1", (fam, -round(26*k)), VERDE, max(1, round(2*k)), "center")
+        texto(cv, cx + r, cy - r + 16*k - 20*k*dt, "+1", (fam, -round(26*k)), VERDE, max(1, round(2*k)), "center")
 
     # linha da sessão: baús desde que abriu + ritmo
     fonte_sessao, b = (fam, -round(16*k)), max(1, round(2*k))
@@ -232,6 +264,9 @@ def overlay(cont, args, estado):
     k = args.escala
     root = tk.Tk()
     root.title("ChestTracker")  # nome do botão na barra de tarefas
+    icone = RECURSOS / "assets" / "chesttracker.ico"
+    if sys.platform == "win32" and icone.exists():
+        root.iconbitmap(default=str(icone))
     root.overrideredirect(True)
     root.attributes("-topmost", True)
     root.configure(bg=CHAVE)
@@ -275,6 +310,8 @@ def autoteste():
     c.press(40); assert abs(c.segurando(40.5) - 0.5) < 1e-9
     c.ajustar(-5); assert c.total == 0 and c.sessao == 0     # nunca negativo
     c.ajustar(+3); c.zerar(); assert c.total == 0 and c.sessao == 3  # F9 zera só o total
+    assert len(BAU) == 16 and all(len(l) == 16 and set(l) <= set(BAU_CORES) | {"."} for l in BAU)
+    assert misturar("#000000", "#FFFFFF", 0.5) == "#808080"
     assert por_hora(5, 60) is None                   # aquecimento
     assert por_hora(30, 1800) == 60 and por_hora(0, 600) == 0
     print("autoteste ok")
