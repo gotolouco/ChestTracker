@@ -86,12 +86,17 @@ def salvar(arquivo, total):
 
 
 def clique_atravessa(root):
-    """Deixa o mouse passar pela janela e tira ela da barra de tarefas (Windows)."""
-    GWL_EXSTYLE, WS_EX_LAYERED, WS_EX_TRANSPARENT, WS_EX_TOOLWINDOW = -20, 0x80000, 0x20, 0x80
+    """Deixa o mouse passar pela janela e mantém o botão na barra de tarefas (Windows)."""
+    GWL_EXSTYLE, WS_EX_LAYERED, WS_EX_TRANSPARENT = -20, 0x80000, 0x20
+    WS_EX_TOOLWINDOW, WS_EX_APPWINDOW = 0x80, 0x40000
     u32 = ctypes.windll.user32
     hwnd = u32.GetParent(root.winfo_id())
     estilo = u32.GetWindowLongW(hwnd, GWL_EXSTYLE)
-    u32.SetWindowLongW(hwnd, GWL_EXSTYLE, estilo | WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW)
+    estilo = (estilo | WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_APPWINDOW) & ~WS_EX_TOOLWINDOW
+    u32.SetWindowLongW(hwnd, GWL_EXSTYLE, estilo)
+    # janela sem borda (overrideredirect) só ganha botão na barra depois de esconder e mostrar de novo
+    root.withdraw()
+    root.after(10, root.deiconify)
 
 
 def iniciar_teclado(cont, args, estado):
@@ -226,6 +231,7 @@ def overlay(cont, args, estado):
 
     k = args.escala
     root = tk.Tk()
+    root.title("ChestTracker")  # nome do botão na barra de tarefas
     root.overrideredirect(True)
     root.attributes("-topmost", True)
     root.configure(bg=CHAVE)
