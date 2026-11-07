@@ -57,3 +57,7 @@ O rodapé mostra quanto tempo você segurou E no último hold. Use esse valor pa
 
 - Caixas de munição também abrem segurando E e contam como baú. Corrija com F7.
 - O contador só lê o teclado e o mouse e desenha uma janela. Ele não mexe no jogo.
+
+## Nova versão
+
+Mude o número no arquivo `VERSION` (ex.: `1.1.0`) e envie para a `main`. O GitHub testa, gera o `ChestTracker.exe` e publica a release `v1.1.0` sozinho.
