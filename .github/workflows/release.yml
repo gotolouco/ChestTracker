@@ -1,0 +1,34 @@
+name: Release
+
+# Ao enviar uma tag v* (ex.: v1.0.0), testa, gera o ChestTracker.exe e publica em Releases.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  exe:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Dependências
+        run: python -m pip install --upgrade pip pynput pyinstaller
+
+      - name: Autoteste
+        run: python contador_baus.py --autoteste
+
+      - name: Gerar .exe
+        run: pyinstaller --onefile --noconsole --name ChestTracker contador_baus.py
+
+      - name: Publicar release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/ChestTracker.exe
+          generate_release_notes: true

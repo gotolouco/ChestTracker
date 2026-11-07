@@ -15,6 +15,8 @@ from pathlib import Path
 
 log = logging.getLogger("baus")
 BAUS_JA_ABERTOS = 1000  # baús abertos antes do contador existir
+# No .exe (PyInstaller) o __file__ fica numa pasta temporária apagada ao fechar; salva ao lado do .exe.
+PASTA = Path(sys.executable).parent if getattr(sys, "frozen", False) else Path(__file__).parent
 
 
 class Contador:
@@ -280,8 +282,8 @@ def main():
     p.add_argument("--x", type=int, default=30, help="posição X do overlay (padrão 30)")
     p.add_argument("--y", type=int, default=30, help="posição Y do overlay (padrão 30)")
     p.add_argument("--escala", type=float, default=1.0, help="tamanho do overlay (padrão 1.0; ex.: 1.5 em tela 2K/4K)")
-    p.add_argument("--arquivo", type=Path, default=Path(__file__).with_name("baus.json"),
-                   help="onde salvar a contagem (padrão baus.json ao lado do script)")
+    p.add_argument("--arquivo", type=Path, default=PASTA / "baus.json",
+                   help="onde salvar a contagem (padrão baus.json ao lado do script/.exe)")
     p.add_argument("--zerar", action="store_true", help="começa a contagem do 0")
     p.add_argument("--debug", action="store_true", help="log detalhado")
     p.add_argument("--autoteste", action="store_true", help="roda os testes da lógica e sai")

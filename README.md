@@ -1,18 +1,25 @@
 # ChestTracker
 
-![Python](https://img.shields.io/badge/python-3.9%2B-3776AB?logo=python&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?logo=windows&logoColor=white)
+![Python](https://img.shields.io/badge/python-3.9%2B-3776AB?logo=python&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?logo=windows&logoColor=white) [![Release](https://img.shields.io/github/v/release/gotolouco/ChestTracker?label=download)](https://github.com/gotolouco/ChestTracker/releases/latest)
 
 Contador de baús do Fortnite: overlay em cima do jogo que conta os baús que você abre. Um baú conta quando você segura **E** pelo tempo de abertura (padrão: entre 0,85 s e 3 s).
 
 ![Prévia do overlay](docs/previa.png)
 
-## Como usar
+## Download
+
+Baixe o **`ChestTracker.exe`** na [última versão](https://github.com/gotolouco/ChestTracker/releases/latest). Não precisa instalar Python.
+
+1. Coloque o `.exe` numa pasta só dele. A contagem é salva em `baus.json` nessa pasta.
+2. Deixe o Fortnite em **Tela cheia em janela**. Na tela cheia normal o overlay não aparece.
+3. Abra o `ChestTracker.exe`. Para fechar, aperte **F10**.
+
+> O Windows pode mostrar "O Windows protegeu o computador", porque o `.exe` não tem assinatura digital paga. Clique em **Mais informações → Executar assim mesmo**.
+
+### Rodando pelo código
 
 1. Instale o [Python](https://www.python.org/downloads/) marcando **Add to PATH**.
-2. Deixe o Fortnite em **Tela cheia em janela**. Na tela cheia normal o overlay não aparece.
-3. Dê dois cliques em `iniciar.bat`. Ele instala o `pynput` e abre o overlay.
-
-A contagem fica salva em `baus.json`, ao lado do script.
+2. Dê dois cliques em `iniciar.bat`. Ele instala o `pynput` e abre o overlay.
 
 ## Atalhos
 
@@ -26,8 +33,10 @@ A contagem fica salva em `baus.json`, ao lado do script.
 
 ## Opções
 
+Funcionam no `.exe` e no script:
+
 ```
-python contador_baus.py --min 0.85 --max 3.0 --escala 1.5 --x 30 --y 30
+ChestTracker.exe --min 0.85 --max 3.0 --escala 1.5 --x 30 --y 30
 ```
 
 | Opção | Padrão | O que faz |
