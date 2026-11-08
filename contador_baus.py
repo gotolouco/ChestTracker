@@ -460,7 +460,7 @@ def janela_tesouros(pai, fam):
     pequena = ("Segoe UI Semibold", 10)
     medir = tkfont.Font(top, family=fam, size=-15).measure
     ui = {"resumo": ler_resumo(REPLAYS), "marcados": ler_marcados(TESOUROS), "rolar": 0, "altura": 0,
-          "hover": None, "rodando": False, "status": "", "erro": False}
+          "hover": None, "rodando": False, "status": "", "erro": False, "proc": None}
     fila, regioes = queue.Queue(), []
 
     def caixa(x0, y0, x1, y1, cor, sk=10):
@@ -567,9 +567,11 @@ def janela_tesouros(pai, fam):
 
         def rodar():
             try:
-                p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-                                     encoding="utf-8", errors="replace",
-                                     creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+                # prioridade baixa: ler muitos replays usa 1 núcleo inteiro e não pode roubar FPS do jogo
+                p = ui["proc"] = subprocess.Popen(
+                    cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8",
+                    errors="replace", creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)
+                    | getattr(subprocess, "BELOW_NORMAL_PRIORITY_CLASS", 0))
                 ultimas = []
                 for linha in p.stdout:
                     linha = linha.strip()
@@ -619,9 +621,15 @@ def janela_tesouros(pai, fam):
         elif id_[0] == "atualizar":
             atualizar()
         elif id_[0] == "fechar":
-            top.destroy()
+            fechar()
             return
         render()
+
+    def fechar():
+        # fechou a janela: para a leitura (o replays.json salva a cada replay, nada se perde)
+        if ui["proc"] and ui["proc"].poll() is None:
+            ui["proc"].terminate()
+        top.destroy()
 
     def rodinha(e):
         passo = -60 if e.delta > 0 or getattr(e, "num", 0) == 4 else 60
@@ -634,6 +642,7 @@ def janela_tesouros(pai, fam):
     cv.bind("<MouseWheel>", rodinha)  # Windows
     cv.bind("<Button-4>", rodinha)    # Linux
     cv.bind("<Button-5>", rodinha)
+    top.protocol("WM_DELETE_WINDOW", fechar)
     top.grab_set()  # a janela de configuração espera esta fechar
     render()
     receber()
