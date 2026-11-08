@@ -1,0 +1,11 @@
+{
+  "name": "chesttracker-replays",
+  "private": true,
+  "description": "Conta baús e itens pelos replays do Fortnite",
+  "main": "ler_replays.js",
+  "license": "GPL-3.0-or-later",
+  "dependencies": {
+    "needle": "^3.0.0",
+    "ooz-wasm": "1.0.0"
+  }
+}

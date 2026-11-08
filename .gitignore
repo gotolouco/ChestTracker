@@ -2,3 +2,7 @@ baus.json
 config.json
 *.tmp
 __pycache__/
+replays.json
+tesouros.json
+replays/node_modules/
+replays/dist/

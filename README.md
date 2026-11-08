@@ -30,6 +30,7 @@
 - **Sessão e ritmo:** mostra quantos baús você abriu desde que abriu o programa e quantos por hora.
 - **Atalhos do seu jeito:** escolha qualquer tecla ou botão do mouse (meio, 4 e 5) para cada ação, na janela que abre antes do painel.
 - **Não atrapalha o jogo:** o mouse passa através do painel, e a contagem fica salva em `baus.json`.
+- **Caça ao Tesouro:** lê os replays das suas partidas, conta os baús que você abriu e mostra a chance de já ter achado cada prêmio da semana. Você marca o que já ganhou.
 
 ## Download
 
@@ -47,6 +48,7 @@ Baixe o **`ChestTracker.exe`** na [última versão](https://github.com/gotolouco
 
 1. Instale o [Python](https://www.python.org/downloads/) marcando **Add to PATH**.
 2. Dê dois cliques em `iniciar.bat`. Ele instala o `pynput` e abre o overlay.
+3. Para a Caça ao Tesouro pelo código, instale também o [Node.js](https://nodejs.org) e rode `npm install` na pasta `replays` (ou use o `contar_replays.bat`, que mostra a contagem no terminal).
 
 ## Configuração
 
@@ -82,6 +84,19 @@ O rodapé do painel mostra quanto tempo você segurou no último hold. Use esse 
 
 <p align="center"><img src="docs/previa.png" alt="Estados do painel: parado, segurando E, pronto para contar e baú contado" width="400"></p>
 
+## Caça ao Tesouro
+
+Na janela de configuração, clique em **TESOUROS**. O ChestTracker lê os replays que o Fortnite grava em `%LOCALAPPDATA%\FortniteGame\Saved\Demos` e mostra:
+
+- **Baús que você abriu**, partida por partida. Só conta o que o seu boneco abriu, mesmo com outros jogadores por perto e depois de renascer.
+- **Chance de já ter achado cada prêmio** da semana (traje dourado, carro, picareta ou mochila, faixa, tela, Pirate Shop Access), pela chance por baú divulgada pela Epic.
+- **Prêmios achados nos replays:** quando você ganha um prêmio, o jogo mostra um baú animado, e ele fica gravado no replay.
+- **Marcar o que você ganhou:** clique no quadrado do prêmio. Marcado, ele mostra **ACHEI!** no lugar da chance. As marcações ficam em `tesouros.json`.
+
+Os replays já lidos ficam em `replays.json`, ao lado do `.exe`. O Fortnite apaga os replays antigos, mas os baús deles continuam na conta. Os replays só são gravados com a opção **Gravar replays** ligada nas configurações do jogo.
+
+> A chance usa a taxa normal. Nas Treasure Hours a Epic aumenta a chance do carro e do traje, e isso não entra na conta. A lista de prêmios muda toda semana e precisa ser atualizada em `replays/ler_replays.js` (`TESOURO`).
+
 ## Limites
 
 - Caixas de munição também abrem segurando E e contam como baú. Corrija com o atalho de descontar (padrão F7).
@@ -106,13 +121,15 @@ O `ChestTracker.exe` é gerado só a partir do código deste repositório, pelo 
 
 ### Privacidade
 
-Este programa não envia nenhuma informação para outros computadores ou serviços, a menos que o usuário peça. Ele lê o teclado e o mouse só para reagir aos atalhos configurados, e guarda apenas a contagem (`baus.json`) e os atalhos (`config.json`) na própria pasta.
+Este programa não envia nenhuma informação para outros computadores ou serviços, a menos que o usuário peça. Ele lê o teclado e o mouse só para reagir aos atalhos configurados, lê os replays do Fortnite só quando você abre a Caça ao Tesouro, e guarda apenas a contagem (`baus.json`), os atalhos (`config.json`), o resultado dos replays (`replays.json`) e os prêmios marcados (`tesouros.json`) na própria pasta.
 
 *This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it.*
 
 ## Licença
 
 [MIT](LICENSE) © 2026 gotolouco
+
+O contador de replays (`replays/`, que vira o `ContadorReplays.exe` dentro do ChestTracker.exe) é GPL-3.0-or-later, porque usa o descompactador [ooz-wasm](https://github.com/SnosMe/ooz-wasm). Ele usa também o [fortnite-replay-parser](https://github.com/xNocken/replay-reader) (MIT), com correções para o Fortnite 43.00. Detalhes em [replays/LICENSE.md](replays/LICENSE.md).
 
 ---
 

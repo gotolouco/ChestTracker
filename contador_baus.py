@@ -9,16 +9,21 @@ import ctypes
 import json
 import logging
 import math
+import re
+import shutil
 import sys
 import threading
 import time
+from datetime import datetime
 from pathlib import Path
 
 log = logging.getLogger("baus")
-BAUS_JA_ABERTOS = 1000  # baús abertos antes do contador existir
+BAUS_JA_ABERTOS = 0  # contagem inicial de quem ainda não tem baus.json
 # No .exe (PyInstaller) o __file__ fica numa pasta temporária apagada ao fechar; salva ao lado do .exe.
 PASTA = Path(sys.executable).parent if getattr(sys, "frozen", False) else Path(__file__).parent
 RECURSOS = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))  # arquivos embutidos no .exe
+REPLAYS = PASTA / "replays.json"     # o que o contador de replays já leu
+TESOUROS = PASTA / "tesouros.json"   # prêmios da Caça ao Tesouro marcados à mão
 
 
 class Contador:
@@ -267,13 +272,26 @@ AZUL_TOPO, AZUL_NOITE, AZUL_FAIXA, CIANO = "#2456D6", "#0A1640", "#050B22", "#3F
 VERDE, VERMELHO, CINZA, ANEL = "#7CFC00", "#FF4D4D", "#AEB8D6", "#16224F"
 FONTES = ("Burbank Big Condensed Black", "Burbank Big Condensed", "Impact", "Arial Black")
 
-# Baú em pixel art 16x16: o mesmo desenho do ícone do programa.
-BAU_CORES = {"k": "#1A0F05", "h": "#FFE58A", "l": "#FFC93C", "d": "#8B5A12", "b": "#E8A317",
-             "s": "#B97C0E", "w": "#FFF3B0", "o": "#5A3A0A"}
-_MEIO = ("hhdhhhhhhdhh", "lldlllllldll", "lldlkkkkldll", "kkkkwwwwkkkk", "bbdkwoowkdbb",
-         "bbdkwwwwkdbb", "bbdbkkkkbdbb", "bbdbbbbbbdbb", "bbdbbbbbbdbb", "ssdssssssdss")
-BAU = (("." * 16,) * 2 + ("..kkkkkkkkkkkk..",) + tuple(".k" + m + "k." for m in _MEIO)
-       + ("..kkkkkkkkkkkk..",) + ("." * 16,) * 2)
+# Baú pirata em pixel art 16x16: o mesmo desenho do ícone do programa (assets/chesttracker.ico).
+# k contorno, h/l/s ouro (luz/meio/sombra), m/n madeira, c/e caveira, r olhos, p pedras roxas
+BAU_CORES = {"k": "#1A0F05", "h": "#FFE58A", "l": "#FFC93C", "s": "#B97C0E", "m": "#9A5B22",
+             "n": "#5E3410", "c": "#F4F1E4", "e": "#B8B3A2", "r": "#FF3B30", "p": "#C45CFF"}
+BAU = ("................",
+       "................",
+       "..kkkkkkkkkkkk..",
+       ".khhhhhhhhhhhhk.",
+       ".kpllmmmmmmllpk.",
+       ".kllmmccccmmllk.",
+       ".klmmccccccmmlk.",
+       ".kkkkcrccrckkkk.",
+       ".khshsceecshshk.",
+       ".klnnncnncnnnlk.",
+       ".klmmmmkkmmmmlk.",
+       ".kpllmmmmmmllpk.",
+       ".kssssssssssssk.",
+       "..kkkkkkkkkkkk..",
+       "................",
+       "................")
 
 
 def misturar(a, b, f):
@@ -381,6 +399,247 @@ def escolher_fonte(root):
     return next((f for f in FONTES if f in familias), "Arial")
 
 
+# --- Caça ao Tesouro: lê o resumo dos replays e guarda os prêmios marcados à mão ---------------
+
+def comando_replays(saida):
+    """Como rodar o contador de replays: o .exe que vai dentro do ChestTracker.exe, ou o node pelo código."""
+    exe = RECURSOS / "ContadorReplays.exe"
+    if exe.exists():
+        return [str(exe), "--saida", str(saida)]
+    js = Path(__file__).parent / "replays" / "ler_replays.js"
+    if js.exists() and shutil.which("node"):
+        return ["node", str(js), "--saida", str(saida)]
+    return None
+
+
+def ler_resumo(arquivo):
+    """O "resumo" que o contador de replays grava no replays.json; None se ainda não rodou ou está quebrado."""
+    try:
+        resumo = json.loads(arquivo.read_text(encoding="utf-8"))["resumo"]
+        return resumo if isinstance(resumo, dict) and "semanas" in resumo else None
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+
+def ler_marcados(arquivo):
+    try:
+        return set(json.loads(arquivo.read_text(encoding="utf-8"))["marcados"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return set()
+
+
+def chave_premio(grupo, premio):
+    """Id de um prêmio marcado: o carro da semana 1 e o da semana 2 são prêmios diferentes."""
+    return f"{grupo}|{premio}"
+
+
+def pct(x):
+    return f"{x * 100:.{2 if x < 0.01 else 1}f}%".replace(".", ",")
+
+
+def data_replay(nome):
+    """'UnsavedReplay-2026.11.08-16.35.49.replay' -> '08/11 16:35'."""
+    m = re.search(r"\d{4}\.(\d{2})\.(\d{2})-(\d{2})\.(\d{2})", nome)
+    return f"{m[2]}/{m[1]} {m[3]}:{m[4]}" if m else nome
+
+
+def janela_tesouros(pai, fam):
+    """Janela da Caça ao Tesouro: atualiza pelos replays e deixa marcar o que você já ganhou."""
+    import queue
+    import subprocess
+    import tkinter as tk
+    from tkinter import font as tkfont
+
+    W, H, TOPO, BASE = 560, 680, 96, 96  # BASE = altura do rodapé
+    top = tk.Toplevel(pai)
+    top.title("ChestTracker - Caça ao Tesouro")
+    top.resizable(False, False)
+    top.transient(pai)
+    cv = tk.Canvas(top, width=W, height=H, bg=AZUL_NOITE, highlightthickness=0)
+    cv.pack()
+    pequena = ("Segoe UI Semibold", 10)
+    medir = tkfont.Font(top, family=fam, size=-15).measure
+    ui = {"resumo": ler_resumo(REPLAYS), "marcados": ler_marcados(TESOUROS), "rolar": 0, "altura": 0,
+          "hover": None, "rodando": False, "status": "", "erro": False}
+    fila, regioes = queue.Queue(), []
+
+    def caixa(x0, y0, x1, y1, cor, sk=10):
+        cv.create_polygon(x0 + sk, y0, x1, y0, x1 - sk, y1, x0, y1, fill=cor, outline="")
+
+    def botao(id_, x0, y0, x1, y1, cor, cor_hover, aresta, rotulo, cor_texto, tam=-18):
+        caixa(x0, y0 + 4, x1, y1 + 4, aresta)
+        caixa(x0, y0, x1, y1, cor_hover if ui["hover"] == id_ else cor)
+        cv.create_text((x0 + x1) / 2, (y0 + y1) / 2, text=rotulo, font=(fam, tam), fill=cor_texto)
+        regioes.append((x0, y0, x1, y1 + 4, id_))
+
+    def linha_premio(y, grupo, p):
+        """Um prêmio: caixa de marcar, nome, chance por baú e a sua chance (ou ACHEI)."""
+        chave = chave_premio(grupo, p["nome"])
+        marcado = chave in ui["marcados"]
+        caixa(24, y, W - 24, y + 40, CARTAO)
+        if TOPO <= y and y + 40 <= H - BASE:
+            regioes.append((24, y, W - 24, y + 40, ("marca", chave)))
+        cor_borda = AMARELO if ui["hover"] == ("marca", chave) else CINZA
+        cv.create_rectangle(42, y + 11, 60, y + 29, outline=cor_borda, width=2, fill=VERDE if marcado else "")
+        if marcado:
+            cv.create_line(45, y + 20, 50, y + 25, 57, y + 14, fill=PRETO, width=3)
+        cv.create_text(74, y + 14, text=p["nome"].upper(), font=(fam, -16), fill=BRANCO, anchor="w")
+        cv.create_text(74, y + 30, text=f"1 em {p['um']:,}".replace(",", "."), font=pequena, fill=CINZA, anchor="w")
+        if marcado:
+            cv.create_text(W - 44, y + 20, text="ACHEI!", font=(fam, -20), fill=VERDE, anchor="e")
+        else:
+            cv.create_text(W - 44, y + 20, text=pct(p["chance"]), font=(fam, -20), fill=AMARELO, anchor="e")
+
+    def secao(y, nome):
+        caixa(24, y, 24 + medir(nome) + 34, y + 26, AMARELO, sk=8)
+        cv.create_text(24 + 17, y + 13, text=nome, font=(fam, -15), fill=PRETO, anchor="w")
+
+    def render():
+        cv.delete("all")
+        regioes.clear()
+        for i in range(16):
+            cv.create_rectangle(0, H * i / 16, W, H * (i + 1) / 16 + 1, outline="",
+                                fill=misturar(AZUL_TOPO, AZUL_NOITE, 0.35 + 0.65 * i / 15))
+        r = ui["resumo"]
+        y = TOPO + 16 - ui["rolar"]
+        if r is None:
+            cv.create_text(W / 2, 300, width=W - 80, font=(fam, -18), fill=CINZA, justify="center",
+                           text="AINDA NÃO LI SEUS REPLAYS.\nCLIQUE EM ATUALIZAR.")
+        else:
+            for w in reversed(r["semanas"]):  # semana atual primeiro
+                fim = datetime.fromisoformat(w["fim"].replace("Z", "+00:00")).astimezone()
+                secao(y, f"{w['nome'].upper()}  ·  ATÉ {fim:%d/%m %H:%M}  ·  {w['baus']} BAÚS")
+                y += 36
+                for p in w["premios"]:
+                    linha_premio(y, w["nome"], p)
+                    y += 46
+                y += 10
+            secao(y, "TODA SEMANA")
+            y += 36
+            for p in r["sempre"]:
+                if p["um"] > 200:  # os dispositivos repetem: não dá para marcar, só esperar
+                    linha_premio(y, "sempre", p)
+                    y += 46
+            esperados = f"{r['dispositivosEsperados']:.1f}".replace(".", ",")
+            cv.create_text(28, y + 10, anchor="w", font=pequena, fill=CINZA,
+                           text=f"Dispositivos: 1 em 127 baús. Com os seus baús, uns {esperados} esperados.")
+            y += 36
+            secao(y, "ACHADOS NOS REPLAYS")
+            y += 36
+            if not r["achados"]:
+                cv.create_text(28, y + 10, anchor="w", font=pequena, fill=CINZA, text="Nenhum baú de prêmio aberto por você.")
+                y += 30
+            for a in r["achados"]:
+                caixa(24, y, W - 24, y + 40, CARTAO)
+                cv.create_text(44, y + 14, text=a["nome"].upper(), font=(fam, -16), fill=VERDE, anchor="w")
+                cv.create_text(44, y + 30, text=f"partida de {data_replay(a['replay'])}: marque acima qual foi",
+                               font=pequena, fill=CINZA, anchor="w")
+                y += 46
+        ui["altura"] = y + ui["rolar"] - TOPO
+
+        # topo e rodapé por cima da lista: o que rolou para fora some atrás deles
+        cv.create_rectangle(0, 0, W, TOPO - 4, fill=AZUL_FAIXA, outline="")
+        cv.create_rectangle(0, 0, W, 4, fill=CIANO, outline="")
+        cv.create_rectangle(0, TOPO - 4, W, TOPO - 1, fill=AMARELO, outline="")
+        desenhar_bau(cv, 56, 48, 4)
+        texto(cv, 104, 38, "CAÇA AO TESOURO", (fam, -36), AMARELO, 3)
+        sub = (f"{r['baus']:,} BAÚS EM {r['partidas']} PARTIDAS".replace(",", ".") if r else "MARQUE O QUE VOCÊ JÁ GANHOU")
+        cv.create_text(106, 72, text=sub, font=(fam, -15), fill=CIANO, anchor="w")
+        cv.create_rectangle(0, H - BASE, W, H, fill=AZUL_FAIXA, outline="")
+        cv.create_rectangle(0, H - BASE, W, H - BASE + 3, fill=AMARELO, outline="")
+        cv.create_text(26, H - BASE + 22, text=ui["status"], font=pequena, width=W - 52, anchor="w",
+                       fill=VERMELHO if ui["erro"] else BRANCO)
+        botao(("fechar",), 24, H - 52, 200, H - 14, TECLA_VAZIA, BORDA, "#070E2C", "FECHAR", CINZA, -16)
+        if ui["rodando"]:
+            botao(("nada",), 216, H - 56, W - 24, H - 14, "#8B5A12", "#8B5A12", "#5A3A0A", "LENDO REPLAYS...", BRANCO, -24)
+        else:
+            botao(("atualizar",), 216, H - 56, W - 24, H - 14, AMARELO, "#FFE58A", "#B97C0E", "ATUALIZAR", PRETO, -26)
+
+    def atualizar():
+        cmd = comando_replays(REPLAYS)
+        if cmd is None:
+            ui.update(status="Não achei o contador de replays (ContadorReplays.exe). Baixe o ChestTracker.exe "
+                             "da última versão.", erro=True)
+            render()
+            return
+        ui.update(rodando=True, status="Lendo os replays novos da pasta do Fortnite...", erro=False)
+        render()
+
+        def rodar():
+            try:
+                p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                                     encoding="utf-8", errors="replace",
+                                     creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+                ultimas = []
+                for linha in p.stdout:
+                    linha = linha.strip()
+                    if linha:
+                        ultimas = (ultimas + [linha])[-3:]
+                        fila.put(("linha", linha))
+                fila.put(("fim", p.wait(), " | ".join(ultimas)))
+            except OSError as e:
+                fila.put(("fim", -1, str(e)))
+
+        threading.Thread(target=rodar, daemon=True).start()
+
+    def receber():
+        while not fila.empty():
+            msg = fila.get_nowait()
+            if msg[0] == "linha" and msg[1].startswith("["):
+                ui["status"] = "Lendo " + msg[1].split(" ...")[0].split("] ")[0].strip("[") + " replays novos..."
+            elif msg[0] == "fim":
+                ui["rodando"] = False
+                novo = ler_resumo(REPLAYS)
+                if msg[1] == 0 and novo:
+                    ui.update(resumo=novo, erro=False, status="Pronto. Marque os prêmios que você já ganhou.")
+                else:
+                    log.warning("Contador de replays saiu com %s: %s", msg[1], msg[2])
+                    ui.update(erro=True, status=f"Não consegui ler os replays: {msg[2][:160]}")
+            render()
+        if top.winfo_exists():
+            top.after(100, receber)
+
+    def achar(e):
+        return next((r[4] for r in reversed(regioes) if r[0] <= e.x <= r[2] and r[1] <= e.y <= r[3]), None)
+
+    def mover(e):
+        id_ = achar(e)
+        if id_ != ui["hover"]:
+            ui["hover"] = id_
+            cv.config(cursor="hand2" if id_ and id_[0] != "nada" else "")
+            render()
+
+    def clicar(e):
+        id_ = achar(e)
+        if not id_:
+            return
+        if id_[0] == "marca":
+            ui["marcados"] ^= {id_[1]}
+            salvar_json(TESOUROS, {"marcados": sorted(ui["marcados"])})
+        elif id_[0] == "atualizar":
+            atualizar()
+        elif id_[0] == "fechar":
+            top.destroy()
+            return
+        render()
+
+    def rodinha(e):
+        passo = -60 if e.delta > 0 or getattr(e, "num", 0) == 4 else 60
+        maximo = max(0, ui["altura"] - (H - TOPO - BASE) + 16)
+        ui["rolar"] = min(max(ui["rolar"] + passo, 0), maximo)
+        render()
+
+    cv.bind("<Motion>", mover)
+    cv.bind("<Button-1>", clicar)
+    cv.bind("<MouseWheel>", rodinha)  # Windows
+    cv.bind("<Button-4>", rodinha)    # Linux
+    cv.bind("<Button-5>", rodinha)
+    top.grab_set()  # a janela de configuração espera esta fechar
+    render()
+    receber()
+    atualizar()  # já lê os replays novos ao abrir (os lidos ficam no replays.json)
+
+
 # Ajustes da janela: chave, rótulo, passo, mínimo, máximo, formato do valor
 AJUSTES = (("min", "TEMPO MÍNIMO", 0.05, 0.1, 10, "{:.2f}s"), ("max", "TEMPO MÁXIMO", 0.1, 0.2, 30, "{:.1f}s"),
            ("escala", "TAMANHO DO PAINEL", 0.1, 0.3, 5, "{:.1f}x"), ("x", "POSIÇÃO X", 10, 0, 7680, "{:.0f} px"),
@@ -440,6 +699,8 @@ def configurar(cfg, arquivo_cfg):
             cv.create_text(24 + 17, y + 13, text=nome, font=(fam, -16), fill=PRETO, anchor="w")
 
         secao(112, "ATALHOS")
+        botao(("tesouros",), W - 150, 108, W - 24, 136, TECLA, TECLA_HOVER, "#13307E")
+        cv.create_text(W - 87, 122, text="TESOUROS", font=(fam, -18), fill=BRANCO)
         for n, (acao, rotulo) in enumerate(ACOES):
             y = 150 + n * 46
             caixa(24, y, W - 24, y + 40, CARTAO)
@@ -559,6 +820,9 @@ def configurar(cfg, arquivo_cfg):
             iniciar()
         elif id_[0] == "restaurar":
             restaurar()
+        elif id_[0] == "tesouros":
+            parar()
+            janela_tesouros(root, fam)
 
     def soltar(_e):
         if ui["repetir"]:
@@ -693,6 +957,15 @@ def autoteste():
         salvar_json(arq, bom); assert carregar_config(arq) == bom
         ruim = copia(PADRAO); ruim["min"] = 5.0          # mínimo maior que o máximo
         salvar_json(arq, ruim); assert carregar_config(arq) == PADRAO
+        rep, tes = Path(d) / "replays.json", Path(d) / "tesouros.json"
+        assert ler_resumo(rep) is None and ler_marcados(tes) == set()      # ainda não rodou
+        rep.write_text('{"replays": {}}', encoding="utf-8"); assert ler_resumo(rep) is None
+        rep.write_text('{"resumo": {"semanas": [], "baus": 3}}', encoding="utf-8"); assert ler_resumo(rep)["baus"] == 3
+        salvar_json(tes, {"marcados": [chave_premio("Semana 2", "So Kawaii (tela)")]})
+        assert ler_marcados(tes) == {"Semana 2|So Kawaii (tela)"}
+    assert pct(0.2226) == "22,3%" and pct(0.0003) == "0,03%" and pct(1) == "100,0%"
+    assert data_replay("UnsavedReplay-2026.11.08-16.35.49.replay") == "08/11 16:35"
+    assert comando_replays(Path("r.json")) is None or "--saida" in comando_replays(Path("r.json"))
     sem_sair = copia(PADRAO); sem_sair["atalhos"]["sair"] = ["", ""]
     assert "Fechar contador" in validar(sem_sair) and validar(PADRAO) is None
     print("autoteste ok")

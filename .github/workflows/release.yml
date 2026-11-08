@@ -1,10 +1,12 @@
 name: Release
 
 # Mudou o arquivo VERSION na main: testa, gera o ChestTracker.exe e publica a release v<VERSION>.
+# Pull request: só testa e gera o .exe para baixar nos artefatos (não assina nem publica).
 on:
   push:
     branches: [main]
     paths: [VERSION]
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -34,6 +36,23 @@ jobs:
       - name: Autoteste
         run: python contador_baus.py --autoteste
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # Node "single executable": o contador de replays vira um .exe que vai dentro do ChestTracker.exe
+      - name: Contador de replays (.exe)
+        working-directory: replays
+        shell: bash
+        run: |
+          npm ci
+          node ler_replays.js --teste
+          npx --yes esbuild@0.24.0 ler_replays.js --bundle --platform=node --target=node22 --outfile=dist/contador.js
+          node --experimental-sea-config sea-config.json
+          node -e "require('fs').copyFileSync(process.execPath, 'dist/ContadorReplays.exe')"
+          npx --yes postject@1.0.0-alpha.6 dist/ContadorReplays.exe NODE_SEA_BLOB dist/sea-prep.blob --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2
+          ./dist/ContadorReplays.exe --teste
+
       - name: Dados do .exe (nome, versão, autor)
         shell: bash
         run: |
@@ -60,18 +79,25 @@ jobs:
           EOF
 
       - name: Gerar .exe
-        run: pyinstaller --onefile --noconsole --name ChestTracker --icon assets/chesttracker.ico --add-data "assets/chesttracker.ico;assets" --version-file versao.txt contador_baus.py
+        run: pyinstaller --onefile --noconsole --name ChestTracker --icon assets/chesttracker.ico --add-data "assets/chesttracker.ico;assets" --add-binary "replays/dist/ContadorReplays.exe;." --version-file versao.txt contador_baus.py
+
+      - name: .exe do pull request (para testar)
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ChestTracker-teste
+          path: dist/ChestTracker.exe
 
       - name: Guardar .exe para assinar
         id: sem_assinatura
-        if: env.SIGNPATH_API_TOKEN != ''
+        if: env.SIGNPATH_API_TOKEN != '' && github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: ChestTracker-sem-assinatura
           path: dist/ChestTracker.exe
 
       - name: Assinar com SignPath (espera a aprovação manual)
-        if: env.SIGNPATH_API_TOKEN != ''
+        if: env.SIGNPATH_API_TOKEN != '' && github.event_name != 'pull_request'
         uses: signpath/github-action-submit-signing-request@v1
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
@@ -84,11 +110,12 @@ jobs:
           output-artifact-directory: assinado
 
       - name: Usar o .exe assinado
-        if: env.SIGNPATH_API_TOKEN != ''
+        if: env.SIGNPATH_API_TOKEN != '' && github.event_name != 'pull_request'
         shell: bash
         run: cp assinado/ChestTracker.exe dist/ChestTracker.exe
 
       - name: Publicar release
+        if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
         with:
           body: |
