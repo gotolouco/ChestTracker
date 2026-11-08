@@ -7,6 +7,7 @@
   <a href="https://github.com/gotolouco/ChestTracker/releases"><img src="https://img.shields.io/github/downloads/gotolouco/ChestTracker/total?label=downloads&color=3FD0FF&labelColor=0A1640" alt="Downloads"></a>
   <img src="https://img.shields.io/badge/Windows-10%20%7C%2011-2456D6?logo=windows&logoColor=white&labelColor=0A1640" alt="Windows 10 e 11">
   <img src="https://img.shields.io/badge/python-3.9%2B-2456D6?logo=python&logoColor=white&labelColor=0A1640" alt="Python 3.9+">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/licen%C3%A7a-MIT-2456D6?labelColor=0A1640" alt="Licença MIT"></a>
 </p>
 
 <p align="center">
@@ -38,7 +39,9 @@ Baixe o **`ChestTracker.exe`** na [última versão](https://github.com/gotolouco
 2. Deixe o Fortnite em **Tela cheia em janela**. Na tela cheia normal o overlay não aparece.
 3. Abra o `ChestTracker.exe`, confira os atalhos e clique em **INICIAR**. Para fechar o painel, use o atalho de fechar (padrão **F10**).
 
-> O Windows pode mostrar "O Windows protegeu o computador", porque o `.exe` não tem assinatura digital paga. Clique em **Mais informações → Executar assim mesmo**.
+> Enquanto o `.exe` não tiver assinatura digital (veja a [política de assinatura](#política-de-assinatura-de-código)), o Windows pode avisar:
+> - **"O Windows protegeu o computador":** clique em **Mais informações → Executar assim mesmo**.
+> - **"O controle inteligente de aplicativos bloqueou..."** (Windows 11): esse bloqueio não tem botão para continuar. Use a versão pelo código (abaixo) ou desative o Controle Inteligente de Aplicativos em **Segurança do Windows → Controle de aplicativos e navegador**.
 
 ### Rodando pelo código
 
@@ -87,6 +90,29 @@ O rodapé do painel mostra quanto tempo você segurou no último hold. Use esse 
 ## Nova versão
 
 Mude o número no arquivo `VERSION` (ex.: `1.1.0`) e envie para a `main`. O GitHub testa, gera o `ChestTracker.exe` e publica a release `v1.1.0` sozinho.
+
+## Política de assinatura de código
+
+> **Em análise:** o pedido de assinatura gratuita à SignPath Foundation está sendo avaliado. Até a aprovação, o `.exe` é publicado sem assinatura.
+
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
+
+| Papel | Quem |
+|---|---|
+| Autores e revisores | [gotolouco](https://github.com/gotolouco) |
+| Aprovadores (aprovam cada versão antes de assinar) | [gotolouco](https://github.com/gotolouco) |
+
+O `ChestTracker.exe` é gerado só a partir do código deste repositório, pelo GitHub Actions ([release.yml](.github/workflows/release.yml)). Cada versão é aprovada manualmente antes de ser assinada.
+
+### Privacidade
+
+Este programa não envia nenhuma informação para outros computadores ou serviços, a menos que o usuário peça. Ele lê o teclado e o mouse só para reagir aos atalhos configurados, e guarda apenas a contagem (`baus.json`) e os atalhos (`config.json`) na própria pasta.
+
+*This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it.*
+
+## Licença
+
+[MIT](LICENSE) © 2026 gotolouco
 
 ---
 

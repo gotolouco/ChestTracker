@@ -13,6 +13,9 @@ permissions:
 jobs:
   exe:
     runs-on: windows-latest
+    env:
+      # Vazio até a SignPath aprovar o projeto: aí o .exe sai sem assinatura, como antes.
+      SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -59,9 +62,39 @@ jobs:
       - name: Gerar .exe
         run: pyinstaller --onefile --noconsole --name ChestTracker --icon assets/chesttracker.ico --add-data "assets/chesttracker.ico;assets" --version-file versao.txt contador_baus.py
 
+      - name: Guardar .exe para assinar
+        id: sem_assinatura
+        if: env.SIGNPATH_API_TOKEN != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ChestTracker-sem-assinatura
+          path: dist/ChestTracker.exe
+
+      - name: Assinar com SignPath (espera a aprovação manual)
+        if: env.SIGNPATH_API_TOKEN != ''
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG || 'ChestTracker' }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG || 'release-signing' }}
+          github-artifact-id: ${{ steps.sem_assinatura.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: assinado
+
+      - name: Usar o .exe assinado
+        if: env.SIGNPATH_API_TOKEN != ''
+        shell: bash
+        run: cp assinado/ChestTracker.exe dist/ChestTracker.exe
+
       - name: Publicar release
         uses: softprops/action-gh-release@v2
         with:
+          body: |
+            Baixe o **ChestTracker.exe** abaixo, coloque numa pasta só dele e abra.
+            ${{ env.SIGNPATH_API_TOKEN != '' && 'Assinado digitalmente. Free code signing provided by SignPath.io, certificate by SignPath Foundation.' || 'Ainda sem assinatura digital: o Windows pode avisar na primeira vez.' }}
+            [Política de assinatura e privacidade](https://github.com/gotolouco/ChestTracker#política-de-assinatura-de-código)
           tag_name: ${{ steps.versao.outputs.tag }}
           name: ChestTracker ${{ steps.versao.outputs.tag }}
           target_commitish: ${{ github.sha }}
