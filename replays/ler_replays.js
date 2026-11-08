@@ -319,12 +319,20 @@ async function main() {
   if (a.teste) return teste();
 
   if (!fs.existsSync(a.pasta)) throw new Error(`pasta de replays não encontrada: ${a.pasta}`);
+  try {
+    require('./fortnite-replay-parser');
+  } catch (e) {
+    // sem isso cada replay "falha" e o erro fica guardado como se o replay estivesse estragado
+    throw new Error(`faltam as dependências do leitor de replays (${e.message.split('\n')[0]}). `
+      + 'Rode "npm install" na pasta replays ou dê dois cliques no contar_replays.bat');
+  }
   const dados = carregar(a.saida);
   const arquivos = fs.readdirSync(a.pasta).filter((f) => f.toLowerCase().endsWith('.replay')).sort();
   const novos = arquivos.filter((f) => {
     const st = fs.statSync(path.join(a.pasta, f));
     const c = dados.replays[f];
-    return a.refazer || !c || c.tamanho !== st.size || c.mtime !== st.mtimeMs;
+    // replay com erro é tentado de novo: falha rápido, e o erro pode ter sido do leitor e não do arquivo
+    return a.refazer || !c || c.erro || c.tamanho !== st.size || c.mtime !== st.mtimeMs;
   });
   console.log(`${arquivos.length} replays em ${a.pasta}, ${novos.length} para ler`);
 
