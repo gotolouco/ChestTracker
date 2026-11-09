@@ -94,6 +94,11 @@ PRONTO = re.compile(r"\] (.+) ready status changed from .+ to (.+) \(")
 NOME = re.compile(r"Successfully logged in user\..*DisplayName=\[(.+?)\]")
 
 
+# Linhas de quando o jogo fecha. Não serve qualquer "LogExit:": o Fortnite também escreve
+# "LogExit: Name:IpNetDriver... shut down" no meio da partida, quando fecha uma conexão.
+FIM_DO_JOGO = ("]LogExit: Exiting.", "]LogExit: Game engine shut down", "]Log file closed")
+
+
 class Fase:
     """Sabe pelo log do Fortnite se o jogador está no lobby, na fila ou em partida."""
 
@@ -128,7 +133,7 @@ class Fase:
             m = PRONTO.search(s)
             if m and self.nome in (None, m[1]):
                 self.fila = m[2] == "Ready"  # Not Ready, Sitting Out e Away saem da fila
-        elif "]LogExit: " in s or "]Log file closed" in s:  # jogo fechou (às vezes sem a linha final)
+        elif any(m in s for m in FIM_DO_JOGO):
             self.base, self.fila = "fechado", False
         elif "Successfully logged in user." in s:
             m = NOME.search(s)
@@ -368,6 +373,8 @@ class Entrada:
         if acao == "segurar":
             if self.pode_contar():  # no lobby e na fila o E não conta
                 self.cont.press(t)
+            else:
+                log.info("Segurou %s fora da partida: não conta", exibir(nome))
         elif acao == "somar":
             self.cont.ajustar(+1)
             self.ao_mudar()
@@ -1161,6 +1168,9 @@ def autoteste():
     e2 = Entrada(c2, copia(PADRAO["atalhos"]), lambda: None, lambda: None, f.pode_contar)
     e2.descer("e", 0); e2.subir("e", 1); assert c2.total == 0  # jogo fechado: E não conta
     e2.descer("f8", 2); assert c2.total == 1                  # somar na mão sempre funciona
+    f.linha("[14][1]LogGlobalStatus: virtual UEngine::LoadMap Load map complete /Delilah/Maps/Delilah_Terrain")
+    f.linha("[15][50]LogExit: Name:IpNetDriver_2147482645 Def:BeaconNetDriver IpNetDriver_2147482645 shut down")
+    assert f.atual == "partida" and f.pode_contar()             # conexão fechando no meio da partida
 
     at = copia(PADRAO["atalhos"])
     assert "Saiu de Somar +1" in atribuir(at, "descontar", 1, "f8")
