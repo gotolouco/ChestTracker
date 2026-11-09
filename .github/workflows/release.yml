@@ -29,7 +29,7 @@ jobs:
         run: echo "tag=v$(tr -d '[:space:]' < VERSION)" >> "$GITHUB_OUTPUT"
 
       - name: Dependências
-        run: python -m pip install --upgrade pip pynput pyinstaller
+        run: python -m pip install --upgrade pip -r requirements.txt pyinstaller
 
       - name: Autoteste
         run: python contador_baus.py --autoteste
@@ -60,7 +60,7 @@ jobs:
           EOF
 
       - name: Gerar .exe
-        run: pyinstaller --onefile --noconsole --name ChestTracker --icon assets/chesttracker.ico --add-data "assets/chesttracker.ico;assets" --version-file versao.txt contador_baus.py
+        run: pyinstaller --onefile --noconsole --name ChestTracker --icon assets/chesttracker.ico --add-data "assets;assets" --version-file versao.txt contador_baus.py
 
       - name: Guardar .exe para assinar
         id: sem_assinatura
