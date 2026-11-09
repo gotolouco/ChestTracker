@@ -9,6 +9,7 @@ import ctypes
 import json
 import logging
 import math
+import os
 import re
 import shutil
 import sys
@@ -35,6 +36,8 @@ class Contador:
         self.sessao = 0      # baús desde que o contador abriu
         self.inicio = None   # hora do 1º press; auto-repeat do Windows é ignorado
         self.ultima = None   # duração do último hold (serve pra calibrar)
+        self.provisorio = 0  # baús do E/atalhos que o replay da partida ainda não confirmou
+        self.replays = set()  # replays já somados no total (ficam no baus.json)
         self.lock = threading.Lock()
 
     def press(self, t):
@@ -51,6 +54,7 @@ class Contador:
             if self.minimo <= dur <= self.maximo:
                 self.total += 1
                 self.sessao += 1
+                self.provisorio += 1
                 return True
             return False
 
@@ -58,10 +62,26 @@ class Contador:
         with self.lock:
             self.total = max(0, self.total + delta)
             self.sessao = max(0, self.sessao + delta)
+            self.provisorio = max(0, self.provisorio + delta)
 
     def zerar(self):
         with self.lock:
             self.total = 0
+            self.provisorio = 0
+
+    def creditar(self, baus, nomes, manter=False):
+        """Replays novos chegaram: os baús deles trocam os provisórios do E. Devolve quanto o total mudou.
+
+        manter=True: alguma partida ficou sem replay válido (jogo fechou), então o E dela continua valendo.
+        shortcut: com partida cortada e partida boa no mesmo lote, o E da boa fica em dobro (raro)
+        """
+        with self.lock:
+            delta = baus if manter else baus - self.provisorio
+            self.total = max(0, self.total + delta)
+            self.sessao = max(0, self.sessao + delta)
+            self.provisorio = 0
+            self.replays |= set(nomes)
+            return delta
 
     def segurando(self, t):
         with self.lock:
@@ -83,8 +103,18 @@ def carregar(arquivo):
         return BAUS_JA_ABERTOS
 
 
-def salvar(arquivo, total):
-    salvar_json(arquivo, {"baus": total})
+def carregar_replays(arquivo):
+    """Replays já somados no baus.json. None = contador de antes dos replays (só partidas novas entram)."""
+    try:
+        return set(json.loads(arquivo.read_text(encoding="utf-8"))["replays"])
+    except FileNotFoundError:
+        return set()  # primeira vez no programa: todos os replays entram na conta
+    except (ValueError, KeyError, TypeError):
+        return None
+
+
+def salvar(arquivo, total, replays=()):
+    salvar_json(arquivo, {"baus": total, "replays": sorted(replays)})
 
 
 def salvar_json(arquivo, dados):
@@ -253,9 +283,10 @@ def iniciar_entrada(cont, cfg, arquivo, estado):
 
     def mudou():
         log.info("Total %d", cont.total)
-        salvar(arquivo, cont.total)
+        salvar(arquivo, cont.total, cont.replays)
 
     e = Entrada(cont, cfg["atalhos"], mudou, lambda: estado.update(sair=True))
+    threading.Thread(target=vigiar_replays, args=(cont, estado, mudou), daemon=True).start()
 
     def clique(x, y, botao, apertou):  # sem return: False pararia o listener
         (e.descer if apertou else e.subir)(nome_botao(botao), time.monotonic())
@@ -419,6 +450,66 @@ def ler_resumo(arquivo):
         return resumo if isinstance(resumo, dict) and "semanas" in resumo else None
     except (OSError, ValueError, KeyError, TypeError):
         return None
+
+
+def pasta_demos():
+    local = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
+    return Path(local) / "FortniteGame" / "Saved" / "Demos"
+
+
+def replays_novos(dados, somados, agora_ms, espera_ms=5 * 60 * 1000):
+    """Do replays.json, o que ainda não entrou no contador: (baús, nomes, alguma partida cortada).
+
+    Replay com erro recente fica para depois (partida ainda gravando); antigo é partida cortada.
+    """
+    baus, nomes, cortada = 0, [], False
+    for nome, r in dados.items():
+        if nome in somados or not isinstance(r, dict):
+            continue
+        if r.get("erro"):
+            if agora_ms - r.get("mtime", agora_ms) < espera_ms:
+                continue
+            cortada = True
+        else:
+            baus += int(r.get("baus", 0))
+        nomes.append(nome)
+    return baus, nomes, cortada
+
+
+def vigiar_replays(cont, estado, mudou, intervalo=60):
+    """Enquanto o overlay roda: quando aparece replay novo, lê e soma os baús dele no contador."""
+    import subprocess
+    cmd = comando_replays(REPLAYS)
+    if cmd is None:
+        log.info("Contador de replays não encontrado: só a tecla E conta")
+        return
+    visto = None
+    while not estado["sair"]:
+        try:  # só roda o leitor se algum replay mudou (a partida em andamento muda o tempo todo)
+            agora = sorted((p.name, p.stat().st_size, p.stat().st_mtime) for p in pasta_demos().glob("*.replay"))
+        except OSError:
+            agora = None
+        if agora != visto:
+            visto = agora
+            try:
+                subprocess.run(cmd, capture_output=True, timeout=900,
+                               creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)
+                               | getattr(subprocess, "BELOW_NORMAL_PRIORITY_CLASS", 0))
+            except (OSError, subprocess.SubprocessError) as e:
+                log.warning("Falha ao ler os replays: %s", e)
+        try:
+            dados = json.loads(REPLAYS.read_text(encoding="utf-8")).get("replays", {})
+        except (OSError, ValueError, AttributeError):
+            dados = {}
+        baus, nomes, cortada = replays_novos(dados, cont.replays, time.time() * 1000)
+        if nomes:
+            delta = cont.creditar(baus, nomes, manter=cortada)
+            log.info("Replays: %d partida(s), %d baús -> total %+d", len(nomes), baus, delta)
+            mudou()
+        for _ in range(intervalo):
+            if estado["sair"]:
+                return
+            time.sleep(1)
 
 
 def ler_marcados(arquivo):
@@ -972,6 +1063,24 @@ def autoteste():
         rep.write_text('{"resumo": {"semanas": [], "baus": 3}}', encoding="utf-8"); assert ler_resumo(rep)["baus"] == 3
         salvar_json(tes, {"marcados": [chave_premio("Semana 2", "So Kawaii (tela)")]})
         assert ler_marcados(tes) == {"Semana 2|So Kawaii (tela)"}
+        b = Path(d) / "baus.json"
+        assert carregar_replays(b) == set()                          # novo: todos os replays entram
+        b.write_text('{"baus": 2347}', encoding="utf-8")
+        assert carregar_replays(b) is None and carregar(b) == 2347   # antigo: só partidas novas
+        salvar(b, 2350, {"x.replay"})
+        assert carregar(b) == 2350 and carregar_replays(b) == {"x.replay"}
+    c = Contador(0.85, 3.0, 100)
+    c.press(0); c.release(1); c.press(2); c.release(3)            # 2 baús pelo E na partida
+    assert c.total == 102 and c.provisorio == 2
+    assert c.creditar(5, ["a.replay"]) == 3 and c.total == 105   # o replay achou 5: troca os 2 por 5
+    assert c.provisorio == 0 and c.replays == {"a.replay"}
+    c.press(4); c.release(5)
+    assert c.creditar(0, ["cortado.replay"], manter=True) == 0 and c.total == 106  # sem replay: o E fica
+    agora = 10 * 60 * 1000
+    dados = {"a.replay": {"baus": 9}, "b.replay": {"baus": 4}, "gravando.replay": {"erro": "x", "mtime": agora - 1000},
+             "cortado.replay": {"erro": "x", "mtime": 0}}
+    assert replays_novos(dados, {"a.replay"}, agora) == (4, ["b.replay", "cortado.replay"], True)
+    assert replays_novos({}, set(), agora) == (0, [], False)
     assert pct(0.2226) == "22,3%" and pct(0.0003) == "0,03%" and pct(1) == "100,0%"
     assert data_replay("UnsavedReplay-2026.11.08-16.35.49.replay") == "08/11 16:35"
     assert comando_replays(Path("r.json")) is None or "--saida" in comando_replays(Path("r.json"))
@@ -1008,6 +1117,11 @@ def main():
                 return
         inicial = 0 if args.zerar else carregar(args.arquivo)
         cont = Contador(cfg["min"], cfg["max"], inicial)
+        replays = carregar_replays(args.arquivo)
+        if replays is None:  # já usava o contador antes: os replays que existem hoje já estão no total
+            replays = {p.name for p in pasta_demos().glob("*.replay")}
+            log.info("Contagem pelos replays ligada: %d replays antigos ficam de fora", len(replays))
+        cont.replays = replays
         estado = {"sair": False}
         log.info("Iniciado com %d baús | conta entre %.2fs e %.2fs | atalhos: %s",
                  inicial, cfg["min"], cfg["max"], texto_atalhos(cfg["atalhos"]))
@@ -1020,7 +1134,7 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
-        salvar(args.arquivo, cont.total)
+        salvar(args.arquivo, cont.total, cont.replays)
         log.info("Encerrado com %d baús (salvo em %s)", cont.total, args.arquivo)
 
 

@@ -26,6 +26,7 @@
 ## Recursos
 
 - **Contagem automática:** segurar E pelo tempo de abrir um baú soma +1. Toque rápido (pegar item) e hold longo (reviver) não contam.
+- **Conferida pelos replays:** quando a partida termina, o ChestTracker lê o replay e troca os baús contados com o E pelo número certo de baús que você abriu.
 - **Anel de interação:** enche enquanto você segura E e fica verde quando o tempo já vai contar.
 - **Sessão e ritmo:** mostra quantos baús você abriu desde que abriu o programa e quantos por hora.
 - **Atalhos do seu jeito:** escolha qualquer tecla ou botão do mouse (meio, 4 e 5) para cada ação, na janela que abre antes do painel.
@@ -83,6 +84,18 @@ O rodapé do painel mostra quanto tempo você segurou no último hold. Use esse 
 | `--autoteste` | roda os testes e sai |
 
 <p align="center"><img src="docs/previa.png" alt="Estados do painel: parado, segurando E, pronto para contar e baú contado" width="400"></p>
+
+## Contagem pelos replays
+
+Com o painel aberto, o ChestTracker olha a pasta de replays do Fortnite (`%LOCALAPPDATA%\FortniteGame\Saved\Demos`) a cada minuto. Quando uma partida termina e o replay fica pronto:
+
+- os baús que você abriu naquela partida entram no contador;
+- os baús que o E (ou o atalho de +1) contou durante a partida eram provisórios e saem, então nada conta duas vezes;
+- se a partida não gerou replay válido (o jogo fechou no meio), o que o E contou continua valendo.
+
+Na primeira vez no programa, sem `baus.json`, o contador começa com os baús de todos os replays que já existem na pasta. Quem já usava o ChestTracker continua com o número que tinha, e só as partidas novas entram. Os replays já somados ficam listados no `baus.json`.
+
+Os replays só existem com a opção **Gravar replays** ligada nas configurações do Fortnite.
 
 ## Caça ao Tesouro
 
