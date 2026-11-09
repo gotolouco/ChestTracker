@@ -28,6 +28,8 @@
 - **Contagem automática:** segurar E pelo tempo de abrir um baú soma +1. Toque rápido (pegar item) e hold longo (reviver) não contam.
 - **Anel de interação:** enche enquanto você segura E e fica verde quando o tempo já vai contar.
 - **Sessão e ritmo:** mostra quantos baús você abriu desde que abriu o programa e quantos por hora.
+- **Lobby, fila e partida:** lê o log do Fortnite e mostra no painel se você está no lobby, procurando partida ou em partida. Segurar E só conta dentro da partida, e o painel mostra os baús da partida atual e quantas partidas você jogou.
+- **Chance do token pirata:** uma barra mostra a chance de já ter caído pelo menos um token da Loja Pirata, pelo total de baús contados.
 - **Atalhos do seu jeito:** escolha qualquer tecla ou botão do mouse (meio, 4 e 5) para cada ação, na janela que abre antes do painel.
 - **Não atrapalha o jogo:** o mouse passa através do painel, e a contagem fica salva em `baus.json`.
 
@@ -46,7 +48,7 @@ Baixe o **`ChestTracker.exe`** na [última versão](https://github.com/gotolouco
 ### Rodando pelo código
 
 1. Instale o [Python](https://www.python.org/downloads/) marcando **Add to PATH**.
-2. Dê dois cliques em `iniciar.bat`. Ele instala o `pynput` e abre o overlay.
+2. Dê dois cliques em `iniciar.bat`. Ele instala o `pynput` e o `Pillow` e abre o overlay.
 
 ## Configuração
 
@@ -56,7 +58,8 @@ Antes do painel abre uma janela para ajustar tudo. As escolhas ficam salvas em `
 
 - **Atalhos:** clique num botão e aperte a tecla ou o botão do mouse. Cada ação aceita até 2 atalhos. **Esc** cancela e **Backspace** deixa o espaço vazio. Se o atalho já estava em outra ação, ele sai de lá.
 - **Tempo mínimo e máximo:** segurar a tecla de abrir baú por um tempo entre os dois conta +1. O padrão é de 0,85 s a 3 s.
-- **Tamanho e posição do painel:** use 1.5 ou mais em telas 2K/4K.
+- **Tamanho e posição do painel:** o painel já acompanha a escala do Windows (125%, 150%) e fica nítido nela. Aumente se quiser ele maior.
+- **Token pirata: 1 em:** a chance de um baú dar o token. O padrão é 1 em 137.500.
 - **Mudar os números:** clique em **+** e **−** (segure para ir mais rápido) ou use a rodinha do mouse em cima do ajuste.
 
 | Ação | Atalho padrão |
@@ -85,7 +88,8 @@ O rodapé do painel mostra quanto tempo você segurou no último hold. Use esse 
 ## Limites
 
 - Caixas de munição também abrem segurando E e contam como baú. Corrija com o atalho de descontar (padrão F7).
-- O contador só lê o teclado e o mouse e desenha uma janela. Ele não mexe no jogo.
+- O contador só lê o teclado, o mouse e o arquivo de log que o Fortnite grava em `%LOCALAPPDATA%\FortniteGame\Saved\Logs`. Ele não mexe no jogo.
+- Se o log não for encontrado, o painel mostra **JOGO NÃO DETECTADO** e o E conta em qualquer lugar, como antes. Os atalhos de somar e descontar funcionam em qualquer fase.
 
 ## Nova versão
 
@@ -106,13 +110,15 @@ O `ChestTracker.exe` é gerado só a partir do código deste repositório, pelo 
 
 ### Privacidade
 
-Este programa não envia nenhuma informação para outros computadores ou serviços, a menos que o usuário peça. Ele lê o teclado e o mouse só para reagir aos atalhos configurados, e guarda apenas a contagem (`baus.json`) e os atalhos (`config.json`) na própria pasta.
+Este programa não envia nenhuma informação para outros computadores ou serviços, a menos que o usuário peça. Ele lê o teclado e o mouse só para reagir aos atalhos configurados, lê o log local do Fortnite só para saber a fase do jogo, e guarda apenas a contagem (`baus.json`) e os atalhos (`config.json`) na própria pasta.
 
 *This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it.*
 
 ## Licença
 
 [MIT](LICENSE) © 2026 gotolouco
+
+A fonte [Anton](assets/Anton-Regular.ttf), de Vernon Adams, é distribuída sob a [SIL Open Font License 1.1](assets/Anton-OFL.txt).
 
 ---
 
