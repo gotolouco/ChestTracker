@@ -3,3 +3,15 @@ config.json
 *.tmp
 *.log
 __pycache__/
+# arte da Epic e dados do chestroute.com: cada jogador baixa com baixar_mapa.bat
+mapa.jpg
+mapa.json
+rota.png
+baus_mapa.json
+# exe de teste gerado por gerar_exe_teste.bat
+ChestTracker_teste.exe
+build_teste/
+desempenho.txt
+roda_teste.txt
+# rotas desenhadas por cada jogador (pessoais)
+rotas/
