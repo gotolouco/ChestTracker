@@ -29,10 +29,13 @@ jobs:
         run: echo "tag=v$(tr -d '[:space:]' < VERSION)" >> "$GITHUB_OUTPUT"
 
       - name: Dependências
-        run: python -m pip install --upgrade pip -r requirements.txt pyinstaller
+        run: python -m pip install --upgrade pip -r requirements.txt -r requirements-rota.txt curl_cffi pyinstaller
 
       - name: Autoteste
         run: python contador_baus.py --autoteste
+
+      - name: Autoteste do minimapa
+        run: python seguir_mapa.py --autoteste
 
       - name: Dados do .exe (nome, versão, autor)
         shell: bash
