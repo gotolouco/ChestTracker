@@ -470,6 +470,10 @@ def exibir(nome, curto=False):
         return ("M" if curto else "MOUSE ") + nome[5:]
     if nome in ("roda_cima", "roda_baixo"):
         return ("R" if curto else "RODA ") + ("↑" if nome == "roda_cima" else "↓")
+    if sys.platform == "win32" and nome.startswith("vk") and nome[2:].isdigit():
+        letra = ctypes.windll.user32.MapVirtualKeyW(int(nome[2:]), 2) & 0xFFFF  # 2 = VK -> caractere do layout
+        if 32 < letra < 0xD800 and chr(letra).isprintable():
+            return chr(letra).upper()
     return nome.replace("_", " ").upper()
 
 
@@ -499,9 +503,26 @@ def nome_tecla(key):
     from pynput import keyboard
     if isinstance(key, keyboard.Key):
         return key.name  # "f8", "space", "shift", ...
-    vk, c = getattr(key, "vk", None), getattr(key, "char", None)
+    windows = sys.platform == "win32"
+    return nome_codigo(getattr(key, "vk", None), getattr(key, "char", None), windows,
+                       vk_do_caractere() if windows else None)
+
+
+def nome_codigo(vk, c, windows=False, vk_char=None):
+    """Nome salvo para uma tecla comum (KeyCode do pynput: código vk + caractere c).
+
+    No Windows o contador lê a tecla pelo código VK (ler_teclas); o nome precisa voltar ao MESMO código,
+    senão a tecla escolhida nunca dispara. Ex.: o "1" do teclado numérico tem caractere "1", mas "1" é
+    lido como o 1 de cima do teclado. Fora do Windows o vk do pynput é outra coisa e vale o caractere.
+    """
     if vk is not None and (0x30 <= vk <= 0x39 or 0x41 <= vk <= 0x5A):
         return chr(vk).lower()  # letra/número pelo código: igual com Shift, Ctrl ou Caps Lock
+    if windows and vk is not None:
+        if vk in NOME_VK:
+            return NOME_VK[vk]  # teclado numérico
+        if c and vk_de(c.lower(), vk_char) == vk:
+            return c.lower()  # símbolo do layout (",", "ç", ";") que volta ao mesmo código
+        return f"vk{vk}"
     if c:
         return c.lower()
     return f"vk{vk}" if vk is not None else None
@@ -513,6 +534,13 @@ def nome_botao(botao):
     nomes = {getattr(mouse.Button, a, None): n for a, n in (("middle", "mouse3"), ("x1", "mouse4"), ("x2", "mouse5"))}
     nomes.pop(None, None)  # x1/x2 só existem no Windows
     return nomes.get(botao)
+
+
+def legivel(nome):
+    """O contador consegue ler esse atalho? No Windows tudo passa por código VK (ler_teclas)."""
+    if sys.platform != "win32" or nome in ("roda_cima", "roda_baixo"):
+        return True
+    return vk_de(nome, vk_do_caractere()) is not None
 
 
 def nome_rolagem(dy):
@@ -580,7 +608,20 @@ VK_NOMES = {"space": 0x20, "enter": 0x0D, "tab": 0x09, "esc": 0x1B, "backspace":
             "menu": 0x5D, "insert": 0x2D, "delete": 0x2E, "home": 0x24, "end": 0x23, "page_up": 0x21,
             "page_down": 0x22, "up": 0x26, "down": 0x28, "left": 0x25, "right": 0x27, "num_lock": 0x90,
             "scroll_lock": 0x91, "pause": 0x13, "print_screen": 0x2C,
-            "mouse3": 0x04, "mouse4": 0x05, "mouse5": 0x06, **{f"f{i}": 0x6F + i for i in range(1, 25)}}
+            "mouse3": 0x04, "mouse4": 0x05, "mouse5": 0x06, **{f"f{i}": 0x6F + i for i in range(1, 25)},
+            # teclado numérico (com Num Lock ligado; desligado ele manda home, end, setas...)
+            **{f"num{i}": 0x60 + i for i in range(10)}, "num*": 0x6A, "num+": 0x6B, "num-": 0x6D, "num.": 0x6E,
+            "num/": 0x6F}
+NOME_VK = {vk: n for n, vk in VK_NOMES.items() if n.startswith("num") and n != "num_lock"}
+
+
+@functools.lru_cache(maxsize=None)
+def vk_do_caractere():
+    """VkKeyScanW com tipos certos: sem restype o -1 (caractere fora do layout) chega como 65535 e vira
+    o código 255, uma tecla que não existe; o atalho ficava mudo sem aviso nenhum."""
+    f = ctypes.windll.user32.VkKeyScanW
+    f.restype, f.argtypes = ctypes.c_short, (ctypes.c_wchar,)
+    return f
 
 
 def vk_de(nome, vk_char=None):
@@ -592,8 +633,8 @@ def vk_de(nome, vk_char=None):
     if len(nome) == 1 and nome.isascii() and nome.isalnum():
         return ord(nome.upper())
     if len(nome) == 1 and vk_char:
-        vk = vk_char(ord(nome))
-        return None if vk == -1 else vk & 0xFF
+        vk = vk_char(nome)
+        return None if vk == -1 or vk & 0xFF in (0, 0xFF) else vk & 0xFF
     return None
 
 
@@ -604,13 +645,14 @@ def ler_teclas(entrada, nomes, apertada, intervalo=0.01, rodando=lambda: True, r
     tecla do PC passam por este programa antes de chegar ao jogo, e qualquer demora dele trava
     a entrada do Windows inteiro (o mouse "agarra", teclas ficam presas).
     """
-    vks, vk_char = {}, ctypes.windll.user32.VkKeyScanW if sys.platform == "win32" else None
+    vks, vk_char = {}, vk_do_caractere() if sys.platform == "win32" else None
     for nome in nomes:
         vk = vk_de(nome, vk_char)
         if vk is None:
             log.warning("Atalho %s não pode ser lido; escolha outra tecla", exibir(nome))
         else:
             vks[nome] = vk
+    log.info("Teclas lidas: %s", ", ".join(f"{n}=0x{vk:02X}" for n, vk in sorted(vks.items())) or "nenhuma")
     baixas = set()
     while rodando():
         t = relogio()
@@ -619,9 +661,11 @@ def ler_teclas(entrada, nomes, apertada, intervalo=0.01, rodando=lambda: True, r
             try:
                 if baixo and nome not in baixas:
                     baixas.add(nome)
+                    log.debug("Tecla %s desceu", nome)
                     entrada.descer(nome, t)
                 elif not baixo and nome in baixas:
                     baixas.discard(nome)
+                    log.debug("Tecla %s subiu", nome)
                     entrada.subir(nome, t)
             except Exception:  # um erro não pode matar a leitura das teclas
                 log.exception("Erro ao tratar %s", nome)
@@ -1469,6 +1513,8 @@ def configurar(cfg, arquivo_cfg, pagina="principal", aviso=None):
             elif nome == "backspace":
                 cfg["atalhos"][acao][i] = ""
                 avisar(f"{ROTULOS[acao]}: atalho removido.")
+            elif not legivel(nome):
+                avisar(f"{exibir(nome)} não pode ser lida pelo contador: escolha outra tecla.", erro=True)
             else:
                 avisar(atribuir(cfg["atalhos"], acao, i, nome))
         if not baixado.empty():
@@ -3427,6 +3473,17 @@ def autoteste():
     assert vk_de("e") == 0x45 and vk_de("7") == 0x37 and vk_de("f8") == 0x77 and vk_de("f24") == 0x87
     assert vk_de("mouse4") == 0x05 and vk_de("vk186") == 186 and vk_de("page_down") == 0x22
     assert vk_de(",") is None and vk_de(",", lambda c: 0x1BC) == 0xBC and vk_de("ç", lambda c: -1) is None
+    assert vk_de("ç", lambda c: 0xFF) is None and vk_de("num1") == 0x61 and vk_de("num+") == 0x6B
+    # tecla escolhida na janela -> nome que volta ao mesmo código VK (bug: numpad e símbolos ficavam mudos)
+    abnt = lambda c: {"ç": 0xBA, ";": 0xBF, "1": 0x31}.get(c, -1)
+    assert nome_codigo(0x61, "1", True, abnt) == "num1" and nome_codigo(0x6B, "+", True, abnt) == "num+"
+    assert nome_codigo(0x31, "!", True, abnt) == "1" and nome_codigo(0x46, "\x06", True, abnt) == "f"
+    assert nome_codigo(0xBA, "ç", True, abnt) == "ç" and nome_codigo(0xBF, ";", True, abnt) == ";"
+    assert nome_codigo(0xC1, "/", True, abnt) == "vk193" and nome_codigo(0xDB, None, True, abnt) == "vk219"
+    assert vk_de(nome_codigo(0xC1, "/", True, abnt)) == 0xC1
+    assert nome_codigo(0x61, "a", False) == "a" and nome_codigo(65457, "1", False) == "1"  # Linux: vale o caractere
+    if sys.platform == "win32":  # VkKeyScanW de verdade: "," é 0xBC e um caractere de fora do layout dá None
+        assert vk_de(",", vk_do_caractere()) == 0xBC and vk_de("\u4e2d", vk_do_caractere()) is None
     c4, f4 = Contador(0.85, 3.0), Fase()
     e4 = Entrada(c4, copia(PADRAO["atalhos"]), lambda: None, lambda: None, f4.pode_contar)
     roteiro = iter([{0x45}] * 100 + [set()] * 2 + [{0x77}, set()])  # segura E 1 s, solta, toca F8
